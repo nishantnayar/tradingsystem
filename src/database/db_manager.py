@@ -1,7 +1,8 @@
 """
 Database manager module for handling PostgreSQL connections and operations.
 """
-from typing import Optional, Dict, Any
+from contextlib import contextmanager
+from typing import Generator, Optional, Dict, Any
 import os
 from pathlib import Path
 import yaml
@@ -11,18 +12,27 @@ from sqlalchemy.pool import QueuePool
 from loguru import logger
 from dotenv import load_dotenv
 
+from src.database.models import Base
+
 
 class DatabaseManager:
     """Manages database connections and operations."""
 
-    def __init__(self, config_path: Optional[str] = None):
-        """
-        Initialize the database manager.
-        
-        Args:
-            config_path: Path to the configuration file. If None, uses default path.
-        """
-        self.config_path = config_path or str(Path(__file__).parent.parent.parent / "config" / "config.yaml")
+    _instance = None
+
+    def __new__(cls):
+        """Singleton pattern to ensure only one database connection."""
+        if cls._instance is None:
+            cls._instance = super(DatabaseManager, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        """Initialize the database manager if not already initialized."""
+        if self._initialized:
+            return
+
+        self.config_path = str(Path(__file__).parent.parent.parent / "config" / "config.yaml")
         self.engine = None
         self.SessionLocal = None
         
@@ -32,6 +42,7 @@ class DatabaseManager:
         
         self._load_config()
         self._initialize_connection()
+        self._initialized = True
 
     def _load_config(self) -> None:
         """Load database configuration from YAML file."""
@@ -53,14 +64,16 @@ class DatabaseManager:
         try:
             connection_string = (
                 f"postgresql://{self.db_config['user']}:{self.db_config['password']}@"
-                f"{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}"
+                f"{self.db_config['host']}:{self.db_config['port']}/{self.db_config['name']}"
             )
 
             self.engine = create_engine(
                 connection_string,
                 poolclass=QueuePool,
-                pool_size=self.db_config['pool_size'],
-                max_overflow=self.db_config['max_overflow']
+                pool_size=self.db_config.get('pool_size', 5),
+                max_overflow=self.db_config.get('max_overflow', 10),
+                pool_timeout=30,
+                pool_recycle=1800
             )
 
             self.SessionLocal = sessionmaker(
@@ -75,16 +88,27 @@ class DatabaseManager:
             logger.error(f"Failed to initialize database connection: {e}")
             raise
 
-    def get_session(self) -> Session:
+    @contextmanager
+    def get_session(self) -> Generator[Session, None, None]:
         """
-        Get a new database session.
+        Get a database session with automatic cleanup.
         
-        Returns:
+        Yields:
             Session: SQLAlchemy session object
         """
         if not self.SessionLocal:
             raise RuntimeError("Database connection not initialized")
-        return self.SessionLocal()
+        
+        session = self.SessionLocal()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Database session error: {e}")
+            raise
+        finally:
+            session.close()
 
     def test_connection(self) -> bool:
         """
@@ -102,8 +126,19 @@ class DatabaseManager:
             logger.error(f"Database connection test failed: {e}")
             return False
 
+    def init_database(self) -> None:
+        """Initialize database tables."""
+        try:
+            Base.metadata.create_all(self.engine)
+            logger.info("Database tables created successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize database tables: {e}")
+            raise
+
     def close(self) -> None:
         """Close all database connections."""
         if self.engine:
             self.engine.dispose()
             logger.info("Database connections closed")
+            self._initialized = False
+            DatabaseManager._instance = None

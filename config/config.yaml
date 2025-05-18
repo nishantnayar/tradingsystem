@@ -1,11 +1,35 @@
+# Database Configuration
 database:
   host: localhost
   port: 5432
-  database: trading_system
+  name: trading_system
   user: ${DB_USER}
   password: ${DB_PASSWORD}
   pool_size: 5
   max_overflow: 10
+
+# Alpaca Configuration
+alpaca:
+  api_key: ${ALPACA_API_KEY}
+  secret_key: ${ALPACA_SECRET_KEY}
+  base_url: https://paper-api.alpaca.markets  # Using paper trading by default
+  data_url: "https://data.alpaca.markets"
+
+# Application Settings
+app:
+  environment: ${ENVIRONMENT}
+  debug: ${DEBUG}
+  log_level: ${LOG_LEVEL}
+
+# Data Collection Settings
+data_collection:
+  interval_minutes: 60  # Collect data every hour
+  symbols:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - META
 
 logging:
   level: INFO
@@ -15,7 +39,7 @@ logging:
   rotation: "500 MB"
   retention: "10 days"
   compression: "zip"
-  max_logs: 5
+  max_age_days: 3  # Keep logs for 3 days
 
 trading:
   default_currency: USD

@@ -1,85 +1,114 @@
 # Trading System
 
-A comprehensive algorithmic trading system built with Python, featuring machine learning models, real-time data processing, and an interactive dashboard.
+A robust trading system built with Python, featuring real-time market data collection, analysis, and automated trading capabilities.
 
 ## Features
 
-- Real-time market data processing
-- Machine learning-based trading strategies
-- Portfolio management and risk control
-- Interactive Streamlit dashboard
-- PostgreSQL database integration
-- Comprehensive backtesting framework
+- Real-time market data collection from Alpaca API
+- Automated data storage in PostgreSQL database
+- Prefect workflow orchestration for reliable data collection
+- Configurable trading strategies
+- Comprehensive logging and monitoring
 
 ## Project Structure
 
 ```
-trading_system/
-├── src/               # Source code
-│   ├── data/         # Data processing modules
-│   ├── models/       # ML models and strategies
-│   ├── trading/      # Trading logic
-│   ├── database/     # Database operations
-│   └── utils/        # Utility functions
-├── tests/            # Test suite
-├── config/           # Configuration files
-├── docs/             # Documentation
-└── notebooks/        # Jupyter notebooks
+tradingsystem/
+├── config/
+│   ├── .env                 # Environment variables
+│   └── config.yaml         # Configuration file
+├── src/
+│   ├── data/
+│   │   ├── data_manager.py    # Data collection and management
+│   │   ├── sources/           # Data source implementations
+│   │   └── symbol_manager.py  # Symbol management
+│   ├── database/
+│   │   ├── db_manager.py      # Database connection management
+│   │   └── models.py          # Database models
+│   ├── utils/
+│   │   ├── config.py          # Configuration utilities
+│   │   └── logger.py          # Logging utilities
+│   └── scripts/
+│       └── run_data_collection.py  # Script to run data collection
+├── deploy_flows.py          # Prefect flow deployment script
+└── requirements.txt         # Project dependencies
 ```
 
-## Setup Instructions
+## Setup
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd trading_system
-```
-
-2. Create and activate a virtual environment:
+1. Create a virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install dependencies:
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Set up PostgreSQL database:
-- Create a database named 'trading_system'
-- Update the database credentials in config/config.yaml
+3. Configure environment variables:
+   - Copy `.env.example` to `.env`
+   - Update the following variables:
+     ```
+     DB_USER=your_db_user
+     DB_PASSWORD=your_db_password
+     ALPACA_API_KEY=your_alpaca_api_key
+     ALPACA_SECRET_KEY=your_alpaca_secret_key
+     ```
 
-5. Create .env file:
+4. Initialize the database:
 ```bash
-cp .env.example .env
-# Edit .env with your credentials
+python src/scripts/init_db.py
 ```
 
-6. Run tests:
+## Running the System
+
+### Data Collection
+
+1. Start the Prefect server:
 ```bash
-pytest
+prefect server start
 ```
 
-## Usage
-
-1. Start the Streamlit dashboard:
+2. Deploy the data collection flow:
 ```bash
-streamlit run src/app.py
+python deploy_flows.py
 ```
 
-2. Access the dashboard at http://localhost:8501
+3. Start a Prefect worker:
+```bash
+prefect worker start -p default
+```
+
+The system will now:
+- Collect market data every hour
+- Store data in the PostgreSQL database
+- Log all activities for monitoring
+
+### Monitoring
+
+- Access the Prefect UI at http://localhost:4200 to monitor flow runs
+- Check the logs in the `logs` directory
+- Query the database for collected data
 
 ## Development
 
-- Follow PEP 8 style guide
-- Write tests for new features
-- Update documentation as needed
-- Use type hints and docstrings
+### Adding New Symbols
 
-## License
+Use the SymbolManager to add new symbols:
+```python
+from src.data.symbol_manager import SymbolManager
 
-MIT License
+# Add a new symbol
+SymbolManager.add_symbol("AAPL", "Apple Inc.")
+```
+
+### Running Tests
+
+```bash
+pytest tests/
+```
 
 ## Contributing
 
@@ -87,4 +116,8 @@ MIT License
 2. Create a feature branch
 3. Commit your changes
 4. Push to the branch
-5. Create a Pull Request 
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 

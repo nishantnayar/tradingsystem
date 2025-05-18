@@ -6,10 +6,11 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 from sqlalchemy import text
-from src.database.db_manager import DatabaseManager
-from src.utils.logger import setup_logging
 
 sys.path.append(str(Path(__file__).parent.parent))
+
+from src.database.db_manager import DatabaseManager
+from src.utils.logger import setup_logging
 
 
 def test_database_connection():

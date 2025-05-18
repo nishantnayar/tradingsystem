@@ -3,3 +3,6 @@ config/.env
 /src/database/__pycache__
 /src/utils/__pycache__
 /tests/__pycache__
+/.cursor
+*.log
+*.pyc

@@ -1,0 +1,88 @@
+from datetime import datetime
+from typing import List, Optional
+import sys
+from pathlib import Path
+
+from loguru import logger
+from sqlalchemy.orm import Session
+sys.path.append(str(Path(__file__).parent.parent))
+
+from src.database.db_manager import DatabaseManager
+from src.database.models import Symbol
+
+
+class SymbolManager:
+    """Manages trading symbols in the database."""
+
+    @staticmethod
+    def add_symbol(symbol: str, name: Optional[str] = None) -> Symbol:
+        """Add a new symbol to the database."""
+        db = DatabaseManager()
+        with db.get_session() as session:
+            existing_symbol = session.query(Symbol).filter_by(symbol=symbol).first()
+            if existing_symbol:
+                if not existing_symbol.is_active:
+                    existing_symbol.is_active = True
+                    existing_symbol.end_date = None
+                    session.commit()
+                    logger.info(f"Reactivated symbol: {symbol}")
+                    return existing_symbol
+                logger.warning(f"Symbol already exists: {symbol}")
+                return existing_symbol
+
+            new_symbol = Symbol(
+                symbol=symbol,
+                name=name,
+                is_active=True,
+                start_date=datetime.utcnow()
+            )
+            session.add(new_symbol)
+            session.commit()
+            logger.info(f"Added new symbol: {symbol}")
+            return new_symbol
+
+    @staticmethod
+    def deactivate_symbol(symbol: str) -> bool:
+        """Deactivate a symbol (mark as delisted)."""
+        db = DatabaseManager()
+        with db.get_session() as session:
+            symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
+            if not symbol_obj:
+                logger.warning(f"Symbol not found: {symbol}")
+                return False
+
+            symbol_obj.is_active = False
+            symbol_obj.end_date = datetime.utcnow()
+            session.commit()
+            logger.info(f"Deactivated symbol: {symbol}")
+            return True
+
+    @staticmethod
+    def get_active_symbols() -> List[str]:
+        """Get list of active symbols."""
+        db = DatabaseManager()
+        with db.get_session() as session:
+            symbols = session.query(Symbol).filter_by(is_active=True).all()
+            return [s.symbol for s in symbols]
+
+    @staticmethod
+    def get_symbol_info(symbol: str) -> Optional[Symbol]:
+        """Get detailed information about a symbol."""
+        db = DatabaseManager()
+        with db.get_session() as session:
+            return session.query(Symbol).filter_by(symbol=symbol).first()
+
+    @staticmethod
+    def update_symbol_name(symbol: str, name: str) -> bool:
+        """Update the name of a symbol."""
+        db = DatabaseManager()
+        with db.get_session() as session:
+            symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
+            if not symbol_obj:
+                logger.warning(f"Symbol not found: {symbol}")
+                return False
+
+            symbol_obj.name = name
+            session.commit()
+            logger.info(f"Updated name for symbol {symbol}: {name}")
+            return True 
