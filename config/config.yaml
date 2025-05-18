@@ -10,9 +10,12 @@ database:
 logging:
   level: INFO
   format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  log_dir: "${REPO_ROOT}/logs"
+  log_file: "trading_system.log"
   rotation: "500 MB"
   retention: "10 days"
   compression: "zip"
+  max_logs: 5
 
 trading:
   default_currency: USD

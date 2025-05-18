@@ -1,0 +1,5 @@
+config/.env
+/.idea
+/src/database/__pycache__
+/src/utils/__pycache__
+/tests/__pycache__
