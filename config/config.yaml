@@ -1,0 +1,37 @@
+database:
+  host: localhost
+  port: 5432
+  database: trading_system
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}
+  pool_size: 5
+  max_overflow: 10
+
+logging:
+  level: INFO
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+  rotation: "500 MB"
+  retention: "10 days"
+  compression: "zip"
+
+trading:
+  default_currency: USD
+  risk_free_rate: 0.02
+  max_position_size: 0.1  # 10% of portfolio
+  stop_loss_pct: 0.02     # 2% stop loss
+  take_profit_pct: 0.04   # 4% take profit
+
+data:
+  default_timeframe: 1d
+  cache_dir: "data/cache"
+  max_retries: 3
+  timeout: 30
+
+ml:
+  random_state: 42
+  test_size: 0.2
+  validation_size: 0.1
+  batch_size: 32
+  learning_rate: 0.001
+  max_epochs: 100
+  early_stopping_patience: 10 
