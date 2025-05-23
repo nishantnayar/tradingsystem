@@ -28,6 +28,7 @@ def deploy_market_data_collection():
         # - Only on weekdays (1-5, where 1=Monday, 5=Friday)
         market_data_collection_flow.serve(
             name="market-data-collection",
+            version="1.0.0",
             tags=["market-data"],
             cron="1 13-21 * * 1-5",  # Run at 1 minute past each hour from 8 AM to 4 PM EST, Monday-Friday
             description="Collects market data during market hours (8 AM - 4 PM EST, Monday-Friday)"

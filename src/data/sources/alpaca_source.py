@@ -68,21 +68,35 @@ class AlpacaDataSource(DataSource):
     def get_latest_data(
         self,
         symbol: str,
-        interval: str = "1h"
+        interval: str = "1h",
+        lookback_days: int = 1  # Default to 1 year of data
     ) -> pd.DataFrame:
-        """Get the latest data from Alpaca."""
+        """Get the latest data from Alpaca.
+        
+        Args:
+            symbol: The stock symbol
+            interval: Data interval (e.g., "1h", "1d")
+            lookback_days: Number of days of historical data to fetch (default: 365)
+        """
         end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=100)  # Get last 24 hours
+        start_date = end_date - timedelta(days=lookback_days)
         return self.get_historical_data(symbol, start_date, end_date, interval)
 
     def get_multiple_symbols(
         self,
         symbols: List[str],
-        interval: str = "1h"
+        interval: str = "1h",
+        lookback_days: int = 1  # Default to 1 year of data
     ) -> Dict[str, pd.DataFrame]:
-        """Get data for multiple symbols from Alpaca."""
+        """Get data for multiple symbols from Alpaca.
+        
+        Args:
+            symbols: List of stock symbols
+            interval: Data interval (e.g., "1h", "1d")
+            lookback_days: Number of days of historical data to fetch (default: 365)
+        """
         end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=1)
+        start_date = end_date - timedelta(days=lookback_days)
         
         request_params = StockBarsRequest(
             symbol_or_symbols=symbols,
@@ -117,6 +131,66 @@ class AlpacaDataSource(DataSource):
         except Exception as e:
             logger.error(f"Error fetching data for multiple symbols: {str(e)}")
             return {}
+
+    def get_extended_historical_data(
+        self,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+        interval: str = "1d"  # Default to daily data for longer periods
+    ) -> pd.DataFrame:
+        """Get extended historical data from Alpaca.
+        
+        This method is designed for fetching large amounts of historical data
+        for training purposes. It handles pagination and rate limits automatically.
+        
+        Args:
+            symbol: The stock symbol
+            start_date: Start date for historical data
+            end_date: End date for historical data
+            interval: Data interval (e.g., "1h", "1d")
+            
+        Returns:
+            DataFrame containing the historical data
+        """
+        try:
+            # For extended historical data, use daily bars by default
+            timeframe = self._convert_interval(interval)
+            
+            # Calculate the number of days between start and end
+            days_diff = (end_date - start_date).days
+            
+            # If requesting more than 1 year of data, use daily bars
+            if days_diff > 365 and interval == "1h":
+                logger.warning("Requesting more than 1 year of hourly data. Switching to daily bars.")
+                timeframe = TimeFrame.Day
+            
+            request_params = StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=timeframe,
+                start=start_date,
+                end=end_date,
+                feed="iex"
+            )
+            
+            bars = self.client.get_stock_bars(request_params)
+            df = pd.DataFrame(bars)
+            
+            # Add symbol column and reset index
+            df.insert(0, "symbol", symbol)
+            df.reset_index(inplace=True)
+            
+            # Add missing columns if not present
+            if 'trade_count' not in df.columns:
+                df['trade_count'] = 0
+            if 'vwap' not in df.columns:
+                df['vwap'] = 0
+                
+            return self._standardize_columns(df)
+            
+        except Exception as e:
+            logger.error(f"Error fetching extended historical data for {symbol}: {str(e)}")
+            return pd.DataFrame()  # Return empty DataFrame on error
 
     def _convert_interval(self, interval: str) -> TimeFrame:
         """Convert string interval to Alpaca TimeFrame."""
