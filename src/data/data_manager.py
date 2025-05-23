@@ -4,6 +4,7 @@ from typing import List, Optional
 from loguru import logger
 from prefect import flow, task
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from src.data.sources.alpaca_source import AlpacaDataSource
 from src.data.symbol_manager import SymbolManager
@@ -45,19 +46,47 @@ def store_market_data(data: dict):
     db = DatabaseManager()
     with db.get_session() as session:
         for symbol, df in data.items():
-            for timestamp, row in df.iterrows():
-                market_data = MarketData(
-                    symbol=symbol,
-                    timestamp=timestamp,
-                    open=float(row['open']),
-                    high=float(row['high']),
-                    low=float(row['low']),
-                    close=float(row['close']),
-                    volume=int(row['volume'])
-                )
-                session.add(market_data)
-        session.commit()
-    logger.info("Data storage completed successfully")
+            if df.empty:
+                logger.warning(f"No data to store for symbol {symbol}")
+                continue
+                
+            for _, row in df.iterrows():
+                try:
+                    # Use upsert operation to prevent duplicates
+                    stmt = text("""
+                        INSERT INTO market_data (symbol, timestamp, open, high, low, close, volume)
+                        VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
+                        ON CONFLICT (symbol, timestamp) 
+                        DO UPDATE SET
+                            open = EXCLUDED.open,
+                            high = EXCLUDED.high,
+                            low = EXCLUDED.low,
+                            close = EXCLUDED.close,
+                            volume = EXCLUDED.volume
+                    """)
+                    session.execute(
+                        stmt,
+                        {
+                            'symbol': symbol,
+                            'timestamp': row['timestamp'],
+                            'open': float(row['open']),
+                            'high': float(row['high']),
+                            'low': float(row['low']),
+                            'close': float(row['close']),
+                            'volume': int(row['volume'])
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Error storing data for {symbol}: {str(e)}")
+                    continue
+                    
+        try:
+            session.commit()
+            logger.info("Data storage completed successfully")
+        except Exception as e:
+            logger.error(f"Error committing data to database: {str(e)}")
+            session.rollback()
+            raise
 
 
 @flow(name="Market Data Collection")

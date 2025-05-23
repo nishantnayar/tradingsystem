@@ -26,6 +26,7 @@ for var in ["DB_USER", "DB_PASSWORD", "ALPACA_API_KEY", "ALPACA_SECRET_KEY"]:
 from src.data.data_manager import market_data_collection_flow
 from src.data.symbol_manager import SymbolManager
 
+
 def main():
     try:
         # First, add some symbols to track
@@ -34,7 +35,9 @@ def main():
             ("MSFT", "Microsoft Corporation"),
             ("GOOGL", "Alphabet Inc."),
             ("AMZN", "Amazon.com Inc."),
-            ("META", "Meta Platforms Inc.")
+            ("META", "Meta Platforms Inc."),
+            ("PDFS", "PDF Solutions, Inc."),
+            ("ROG", "Rogers Corporation")
         ]
 
         # Add symbols to the database
@@ -51,5 +54,6 @@ def main():
         logger.error(f"Error in data collection: {str(e)}")
         sys.exit(1)
 
+
 if __name__ == "__main__":
-    main() 
+    main()

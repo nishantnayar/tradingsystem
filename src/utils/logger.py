@@ -39,7 +39,7 @@ def cleanup_old_logs(log_dir: Path, max_age_days: int) -> None:
         max_age_days: Maximum age of log files in days
     """
     cutoff_date = datetime.now() - timedelta(days=max_age_days)
-    
+
     for log_file in log_dir.glob("*.log*"):
         try:
             file_time = datetime.fromtimestamp(log_file.stat().st_mtime)
@@ -53,8 +53,11 @@ def cleanup_old_logs(log_dir: Path, max_age_days: int) -> None:
 log_queue = Queue()
 stop_event = threading.Event()
 
+
 def database_log_worker():
     """Worker thread for processing database logs."""
+    db_manager = DatabaseManager()
+
     while not stop_event.is_set():
         try:
             # Get log entry from queue with timeout
@@ -62,26 +65,26 @@ def database_log_worker():
             if log_entry is None:
                 continue
 
-            # Create a new database connection for each log entry
-            db_manager = DatabaseManager()
-            session = db_manager.get_session()
             try:
                 # Check if logs table exists
-                result = session.execute(text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'logs')"))
-                if not result.scalar():
-                    print("Logs table does not exist yet. Skipping database logging.")
-                    continue
+                with db_manager.get_session() as session:
+                    result = session.execute(
+                        text("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'logs')"))
+                    if not result.scalar():
+                        print("Logs table does not exist yet. Skipping database logging.")
+                        continue
 
-                session.add(log_entry)
-                session.commit()
+                    session.add(log_entry)
+                    session.commit()
             except Exception as e:
                 print(f"Failed to log to database: {str(e)}")
-            finally:
-                session.close()
-                db_manager.close()
+
         except Exception:
             # Timeout or other error, continue
             continue
+
+    # Clean up database connection when worker stops
+    db_manager.close()
 
 
 def database_log_sink(message):
@@ -125,15 +128,15 @@ def setup_logging(config_path: str = None) -> None:
     """
     if config_path is None:
         config_path = str(get_repo_root() / "config" / "config.yaml")
-    
+
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
             log_config = config['logging']
-        
+
         # Remove default logger
         logger.remove()
-        
+
         # Add console logger
         logger.add(
             sys.stderr,
@@ -141,15 +144,15 @@ def setup_logging(config_path: str = None) -> None:
             level=log_config['level'],
             colorize=True
         )
-        
+
         # Create log directory
         repo_root = get_repo_root()
         log_dir = Path(str(log_config['log_dir']).replace("${REPO_ROOT}", str(repo_root)))
         log_dir.mkdir(exist_ok=True)
-        
+
         # Clean up old logs
         cleanup_old_logs(log_dir, log_config['max_age_days'])
-        
+
         # Add file logger with date-based filename
         log_file = log_dir / f"{log_config['log_file'].replace('.log', '')}_{datetime.now().strftime('%Y-%m-%d')}.log"
         logger.add(
@@ -160,23 +163,23 @@ def setup_logging(config_path: str = None) -> None:
             retention=log_config['retention'],
             compression=log_config['compression']
         )
-        
+
         # Start database logging worker thread
         worker_thread = threading.Thread(target=database_log_worker, daemon=True)
         worker_thread.start()
-        
+
         # Add database logger
         logger.add(
             database_log_sink,
             format=log_config['format'],
             level=log_config['level']
         )
-        
+
         # Register cleanup function
         atexit.register(lambda: stop_event.set())
-        
+
         logger.info("Logging configuration completed successfully")
-        
+
     except Exception as e:
         print(f"Failed to set up logging: {e}")
         raise

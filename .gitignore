@@ -6,3 +6,4 @@ config/.env
 /.cursor
 *.log
 *.pyc
+/src/archive

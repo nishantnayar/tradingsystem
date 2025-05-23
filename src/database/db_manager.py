@@ -131,8 +131,34 @@ class DatabaseManager:
         try:
             Base.metadata.create_all(self.engine)
             logger.info("Database tables created successfully")
+            
+            # Add unique constraint if it doesn't exist
+            self._add_unique_constraint()
         except Exception as e:
             logger.error(f"Failed to initialize database tables: {e}")
+            raise
+
+    def _add_unique_constraint(self) -> None:
+        """Add unique constraint to market_data table if it doesn't exist."""
+        try:
+            # Check if constraint already exists
+            with self.engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 1
+                    FROM information_schema.table_constraints
+                    WHERE constraint_name = 'uix_market_data_symbol_timestamp'
+                    AND table_name = 'market_data'
+                """))
+                if not result.scalar():
+                    # Read and execute the migration script
+                    migration_path = Path(__file__).parent / "sql" / "add_unique_constraint.sql"
+                    with open(migration_path, 'r') as f:
+                        migration_sql = f.read()
+                    conn.execute(text(migration_sql))
+                    conn.commit()
+                    logger.info("Added unique constraint to market_data table")
+        except Exception as e:
+            logger.error(f"Failed to add unique constraint: {e}")
             raise
 
     def close(self) -> None:

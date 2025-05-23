@@ -2,7 +2,7 @@
 Database models for the trading system.
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Text, create_engine, Float, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, create_engine, Float, Boolean, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -57,6 +57,11 @@ class MarketData(Base):
     low = Column(Float, nullable=False)
     close = Column(Float, nullable=False)
     volume = Column(Integer, nullable=False)
+
+    # Add unique constraint on symbol and timestamp
+    __table_args__ = (
+        UniqueConstraint('symbol', 'timestamp', name='uix_market_data_symbol_timestamp'),
+    )
 
     def __repr__(self):
         return f"<MarketData(symbol='{self.symbol}', timestamp='{self.timestamp}')>" 
