@@ -70,7 +70,19 @@ class SymbolManager:
         """Get detailed information about a symbol."""
         db = DatabaseManager()
         with db.get_session() as session:
-            return session.query(Symbol).filter_by(symbol=symbol).first()
+            symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
+            if symbol_obj:
+                # Create a new instance with the same data to avoid session binding issues
+                return Symbol(
+                    symbol=symbol_obj.symbol,
+                    name=symbol_obj.name,
+                    is_active=symbol_obj.is_active,
+                    start_date=symbol_obj.start_date,
+                    end_date=symbol_obj.end_date,
+                    created_at=symbol_obj.created_at,
+                    updated_at=symbol_obj.updated_at
+                )
+            return None
 
     @staticmethod
     def update_symbol_name(symbol: str, name: str) -> bool:

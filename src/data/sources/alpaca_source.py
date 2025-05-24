@@ -209,44 +209,54 @@ class AlpacaDataSource(DataSource):
         if df.empty:
             return df
             
-        # Log the actual columns we receive
-        logger.debug(f"Standardizing columns. Available columns: {df.columns.tolist()}")
+        # Create a list to store the standardized data
+        standardized_data = []
         
-        # Map Alpaca's abbreviated column names to our expected format
-        column_map = {
-            "o": "open",
-            "h": "high",
-            "l": "low",
-            "c": "close",
-            "v": "volume",
-            "n": "trade_count",
-            "vw": "vwap",
-            "t": "timestamp"
-        }
+        # Get the symbol column if it exists
+        symbol_column = None
+        for col in df.columns:
+            if col != 'symbol' and col != 'timestamp' and col != 'index':
+                symbol_column = col
+                break
         
-        # Create a new DataFrame with only the columns we need
-        standardized_df = pd.DataFrame()
-        for alpaca_col, our_col in column_map.items():
-            if alpaca_col in df.columns:
-                standardized_df[our_col] = df[alpaca_col]
-            else:
-                logger.warning(f"Column {alpaca_col} not found in DataFrame")
+        if symbol_column is None:
+            logger.error("No symbol data column found in DataFrame")
+            return pd.DataFrame()
+            
+        # Extract data from each row
+        for idx, row in df.iterrows():
+            if isinstance(row[symbol_column], dict):
+                data_point = {
+                    'open': row[symbol_column].get('o', 0),
+                    'high': row[symbol_column].get('h', 0),
+                    'low': row[symbol_column].get('l', 0),
+                    'close': row[symbol_column].get('c', 0),
+                    'volume': row[symbol_column].get('v', 0),
+                    'trade_count': row[symbol_column].get('n', 0),
+                    'vwap': row[symbol_column].get('vw', 0),
+                    'timestamp': row[symbol_column].get('t', 0),
+                    'symbol': row['symbol'] if 'symbol' in row else symbol_column
+                }
+                standardized_data.append(data_point)
         
-        # Convert timestamp to datetime if it exists
+        # Create DataFrame from the standardized data
+        standardized_df = pd.DataFrame(standardized_data)
+        
+        # Set timestamp as index if it exists
         if 'timestamp' in standardized_df.columns:
             try:
-                # First try parsing as ISO format
+                # Convert timestamp to datetime
                 standardized_df['timestamp'] = pd.to_datetime(standardized_df['timestamp'])
-            except (ValueError, TypeError):
-                try:
-                    # If that fails, try parsing as Unix timestamp (milliseconds)
-                    standardized_df['timestamp'] = pd.to_datetime(standardized_df['timestamp'], unit='ms')
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Failed to convert timestamp: {e}")
-                    # If both fail, return empty DataFrame
-                    return pd.DataFrame()
-            
-            logger.debug(f"Converted timestamp column to datetime. Sample: {standardized_df['timestamp'].iloc[0]}")
+                # Set as index
+                standardized_df.set_index('timestamp', inplace=True)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Failed to convert timestamp: {e}")
+                return pd.DataFrame()
         
-        logger.debug(f"Standardized columns: {standardized_df.columns.tolist()}")
+        # Add missing columns with default values
+        required_columns = ['open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap']
+        for col in required_columns:
+            if col not in standardized_df.columns:
+                standardized_df[col] = 0
+        
         return standardized_df 

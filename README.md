@@ -1,113 +1,111 @@
 # Trading System
 
-A robust trading system built with Python, featuring real-time market data collection, analysis, and automated trading capabilities.
+A comprehensive trading system with real-time market data collection and analysis capabilities.
 
 ## Features
 
 - Real-time market data collection from Alpaca API
-- Automated data storage in PostgreSQL database
-- Prefect workflow orchestration for reliable data collection
-- Configurable trading strategies
-- Comprehensive logging and monitoring
+- Historical data storage in PostgreSQL
+- Technical analysis tools and indicators
+- Modern UI with Streamlit
+- Automated data collection workflows with Prefect
+- Comprehensive test suite
 
 ## Project Structure
 
 ```
 tradingsystem/
-├── config/
-│   ├── .env                 # Environment variables
-│   └── config.yaml         # Configuration file
-├── src/
-│   ├── data/
-│   │   ├── data_manager.py    # Data collection and management
-│   │   ├── sources/           # Data source implementations
-│   │   └── symbol_manager.py  # Symbol management
-│   ├── database/
-│   │   ├── db_manager.py      # Database connection management
-│   │   └── models.py          # Database models
-│   ├── utils/
-│   │   ├── config.py          # Configuration utilities
-│   │   └── logger.py          # Logging utilities
-│   └── scripts/
-│       └── run_data_collection.py  # Script to run data collection
-├── deploy_flows.py          # Prefect flow deployment script
-└── requirements.txt         # Project dependencies
+├── config/                 # Configuration files
+│   ├── config.yaml        # Main configuration
+│   └── prefect.yaml       # Prefect workflow configuration
+├── docs/                  # Documentation
+├── notebooks/            # Jupyter notebooks for analysis
+├── src/                  # Source code
+│   ├── data/            # Data management
+│   │   ├── sources/     # Data source implementations
+│   │   └── models/      # Data models
+│   ├── database/        # Database management
+│   │   ├── migrations/  # Database migrations
+│   │   └── sql/        # SQL scripts
+│   ├── models/          # ML models
+│   ├── scripts/         # Utility scripts
+│   ├── trading/         # Trading strategies
+│   ├── ui/             # User interface
+│   └── utils/          # Utility functions
+├── tests/               # Test suite
+│   ├── test_data/      # Data tests
+│   ├── test_models/    # Model tests
+│   └── test_trading/   # Trading tests
+├── .gitignore          # Git ignore file
+├── pyproject.toml      # Project configuration
+└── README.md           # This file
 ```
 
-## Setup
+## Prerequisites
 
-1. Create a virtual environment:
+- Python 3.8 or higher
+- PostgreSQL database
+- Alpaca API credentials
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/tradingsystem.git
+cd tradingsystem
+```
+
+2. Create and activate a virtual environment:
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. Install dependencies:
+3. Install the package in development mode:
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
-3. Configure environment variables:
-   - Copy `.env.example` to `.env`
-   - Update the following variables:
-     ```
-     DB_USER=your_db_user
-     DB_PASSWORD=your_db_password
-     ALPACA_API_KEY=your_alpaca_api_key
-     ALPACA_SECRET_KEY=your_alpaca_secret_key
-     ```
+4. Set up environment variables:
+```bash
+cp config/.env.example config/.env
+# Edit config/.env with your credentials
+```
 
-4. Initialize the database:
+5. Initialize the database:
 ```bash
 python src/scripts/init_db.py
 ```
 
-## Running the System
+## Usage
 
-### Data Collection
-
-1. Start the Prefect server:
+1. Start the Streamlit UI:
 ```bash
-prefect server start
+streamlit run src/ui/app.py
 ```
 
-2. Deploy the data collection flow:
+2. Run data collection workflows:
 ```bash
-python deploy_flows.py
+python src/scripts/deploy_flows.py
 ```
-
-3. Start a Prefect worker:
-```bash
-prefect worker start -p default
-```
-
-The system will now:
-- Collect market data every hour
-- Store data in the PostgreSQL database
-- Log all activities for monitoring
-
-### Monitoring
-
-- Access the Prefect UI at http://localhost:4200 to monitor flow runs
-- Check the logs in the `logs` directory
-- Query the database for collected data
 
 ## Development
 
-### Adding New Symbols
-
-Use the SymbolManager to add new symbols:
-```python
-from src.data.symbol_manager import SymbolManager
-
-# Add a new symbol
-SymbolManager.add_symbol("AAPL", "Apple Inc.")
+1. Run tests:
+```bash
+pytest
 ```
 
-### Running Tests
-
+2. Check code style:
 ```bash
-pytest tests/
+black src tests
+flake8 src tests
+mypy src
+```
+
+3. Sort imports:
+```bash
+isort src tests
 ```
 
 ## Contributing
@@ -120,4 +118,11 @@ pytest tests/
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Alpaca API for market data
+- Streamlit for the UI framework
+- SQLAlchemy for database management
+- Prefect for workflow orchestration 

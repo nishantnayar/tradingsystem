@@ -1,15 +1,42 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
+import os
 
 from loguru import logger
 from prefect import flow, task
+from prefect.context import get_run_context
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import pandas as pd
 
 from src.data.sources.alpaca_source import AlpacaDataSource
 from src.data.symbol_manager import SymbolManager
 from src.database.db_manager import DatabaseManager
 from src.database.models import MarketData
+
+
+def generate_flow_run_name(flow_prefix: str) -> str:
+    """Generate a descriptive flow run name for debugging.
+    
+    Args:
+        flow_prefix: Prefix for the flow name (e.g., 'market-data-run')
+        
+    Returns:
+        str: Flow run name in format: prefix-YYYYMMDD-HHMMSS-{context}
+    """
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    
+    # Get environment info for debugging
+    env = os.getenv('ENVIRONMENT', 'dev')
+    
+    # Get active symbols count for market data flows
+    try:
+        symbols_count = len(SymbolManager.get_active_symbols())
+        context = f"symbols-{symbols_count}"
+    except Exception:
+        context = "unknown-symbols"
+    
+    return f"{flow_prefix}-{timestamp}-{env}-{context}"
 
 
 @task(retries=3, retry_delay_seconds=60)
@@ -89,7 +116,7 @@ def store_market_data(data: dict):
             raise
 
 
-@flow(name="Market Data Collection")
+@flow(name="Market Data Collection", flow_run_name=generate_flow_run_name("market-data"))
 def market_data_collection_flow():
     """Flow for collecting and storing market data."""
     data = collect_market_data()
@@ -99,7 +126,7 @@ def market_data_collection_flow():
 class DataManager:
     """Manages data collection and storage for the trading system."""
 
-    def get_latest_data(self, symbol: str) -> Optional[dict]:
+    def get_latest_data(self, symbol: str) -> Optional[pd.DataFrame]:
         """Get the latest data for a symbol."""
         try:
             # Check if symbol is active
@@ -108,8 +135,14 @@ class DataManager:
                 logger.warning(f"Symbol {symbol} is not active")
                 return None
 
+            # Get data from Alpaca
             alpaca_source = AlpacaDataSource()
-            return alpaca_source.get_latest_data(symbol)
+            data = alpaca_source.get_latest_data(symbol)
+            
+            if data is not None and not data.empty:
+                return data
+            return None
+            
         except Exception as e:
             logger.error(f"Error getting latest data for {symbol}: {str(e)}")
-            return None 
+            return None

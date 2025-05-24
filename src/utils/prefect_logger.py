@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from loguru import logger
 from prefect.logging import get_run_logger as prefect_get_run_logger
-from prefect.logging.handlers import PrefectConsoleHandler
 from prefect.exceptions import MissingContextError
 import logging
 
@@ -23,25 +22,27 @@ class PrefectLogHandler(logging.Handler):
     def emit(self, record):
         """Emit a log record to our logging system."""
         try:
-            # Convert log record to our format
-            log_entry = {
-                "timestamp": record.created,
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "module": record.module,
-                "function": record.funcName,
-                "line_number": record.lineno
-            }
-            
-            # Log using our logger
-            if record.levelno >= 40:  # ERROR or higher
-                logger.error(log_entry["message"])
-            elif record.levelno >= 30:  # WARNING
-                logger.warning(log_entry["message"])
-            elif record.levelno >= 20:  # INFO
-                logger.info(log_entry["message"])
-            else:  # DEBUG
-                logger.debug(log_entry["message"])
+            # Only handle our application logs
+            if not record.name.startswith('prefect'):
+                # Convert log record to our format
+                log_entry = {
+                    "timestamp": record.created,
+                    "level": record.levelname,
+                    "message": record.getMessage(),
+                    "module": record.module,
+                    "function": record.funcName,
+                    "line_number": record.lineno
+                }
+                
+                # Log using our logger
+                if record.levelno >= 40:  # ERROR or higher
+                    logger.error(log_entry["message"])
+                elif record.levelno >= 30:  # WARNING
+                    logger.warning(log_entry["message"])
+                elif record.levelno >= 20:  # INFO
+                    logger.info(log_entry["message"])
+                else:  # DEBUG
+                    logger.debug(log_entry["message"])
                 
         except Exception as e:
             logger.error(f"Error in Prefect log handler: {str(e)}")
@@ -56,26 +57,13 @@ def setup_prefect_logging() -> Optional[Any]:
     setup_logging()
     
     try:
-        # Get all relevant loggers
-        loggers = [
-            logging.getLogger(),  # Root logger
-            logging.getLogger("prefect"),  # Prefect logger
-            logging.getLogger("prefect.flow_runs"),  # Flow runs logger
-            logging.getLogger("prefect.task_runs"),  # Task runs logger
-            # logging.getLogger("prefect.flow_runs.runner"),  # Flow runner logger
-            # logging.getLogger("prefect.flow_runs.worker"),  # Flow worker logger
-            # logging.getLogger("prefect.flow_runs.worker.worker"),  # Worker logger
-            # logging.getLogger("prefect.flow_runs.worker.worker.worker"),  # Nested worker logger
-        ]
+        # Get the root logger for our application logs
+        root_logger = logging.getLogger()
         
         # Create and configure our handler
         prefect_handler = PrefectLogHandler()
-        prefect_handler.setLevel(logging.INFO)  # Capture all levels
-        
-        # Add handler to all loggers
-        for logger_instance in loggers:
-            logger_instance.addHandler(prefect_handler)
-            logger_instance.setLevel(logging.INFO)  # Ensure all levels are captured
+        prefect_handler.setLevel(logging.INFO)
+        root_logger.addHandler(prefect_handler)
         
         # Try to get the Prefect logger for flow/task context
         prefect_logger = prefect_get_run_logger()
