@@ -12,12 +12,16 @@ from prefect import flow
 
 # Import the flow function directly
 from src.data.data_manager import market_data_collection_flow
-from src.utils.logger import setup_logging
+from src.utils.prefect_logger import setup_prefect_logging
 
 
 def deploy_market_data_collection():
     """Deploy the market data collection flow."""
     try:
+        # Set up integrated logging
+        prefect_logger = setup_prefect_logging()
+        log = prefect_logger if prefect_logger is not None else logger
+        
         # Deploy the flow using the new API
         # Cron format: minute hour day_of_month month day_of_week
         # 0 13-21 * * 1-5 means:
@@ -33,29 +37,30 @@ def deploy_market_data_collection():
             cron="1 13-21 * * 1-5",  # Run at 1 minute past each hour from 8 AM to 4 PM EST, Monday-Friday
             description="Collects market data during market hours (8 AM - 4 PM EST, Monday-Friday)"
         )
-
-        logger.info("Successfully deployed market data collection flow")
-
+        
+        log.info("Successfully deployed market data collection flow")
+        
     except Exception as e:
-        logger.error(f"Failed to deploy market data collection flow: {str(e)}")
+        log.error(f"Failed to deploy market data collection flow: {str(e)}")
         raise
 
 
 def main():
     """Main function to deploy all flows."""
     try:
-        # Initialize logging
-        setup_logging()
+        # Set up integrated logging
+        prefect_logger = setup_prefect_logging()
+        log = prefect_logger if prefect_logger is not None else logger
         
-        logger.info("Starting flow deployments...")
+        log.info("Starting flow deployments...")
         
         # Deploy market data collection flow
         deploy_market_data_collection()
         
-        logger.info("All flows deployed successfully")
+        log.info("All flows deployed successfully")
         
     except Exception as e:
-        logger.error(f"Error deploying flows: {str(e)}")
+        log.error(f"Error deploying flows: {str(e)}")
         sys.exit(1)
 
 
