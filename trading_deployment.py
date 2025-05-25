@@ -61,8 +61,8 @@
 from datetime import datetime
 from prefect import flow, get_run_logger
 from prefect.server.schemas.schedules import CronSchedule
-from prefect.blocks.system import Secret
-from prefect.context import get_run_context
+from prefect_sqlalchemy import SqlAlchemyConnector
+import os
 
 from src.data.data_manager import collect_market_data, store_market_data
 
@@ -78,23 +78,19 @@ async def data_ingestion_subflow():
     logger.info("Starting data ingestion flow...")
 
     try:
-        # Get database credentials from Prefect secrets
-        db_user = str(await Secret.load("db-user"))
-        db_password = str(await Secret.load("db-password"))
-        db_host = str(await Secret.load("db-host"))
-        db_port = str(await Secret.load("db-port"))
-        db_name = str(await Secret.load("db-name"))
+        # Load database connector from Prefect block
+        connector = SqlAlchemyConnector.load("tradingsystemdb")
+        connection_info = connector.connection_info
 
-        # Set environment variables for database connection
-        import os
-        os.environ["DB_USER"] = db_user
-        os.environ["DB_PASSWORD"] = db_password
-        os.environ["DB_HOST"] = db_host
-        os.environ["DB_PORT"] = db_port
-        os.environ["DB_NAME"] = db_name
+        # Set environment variables for backward compatibility
+        os.environ["DB_USER"] = connection_info.username
+        os.environ["DB_PASSWORD"] = connection_info.password
+        os.environ["DB_HOST"] = connection_info.host
+        os.environ["DB_PORT"] = str(connection_info.port)
+        os.environ["DB_NAME"] = connection_info.database
 
         # Debug log the connection details (excluding password)
-        logger.debug(f"Database connection details: host={db_host}, port={db_port}, user={db_user}, database={db_name}")
+        logger.debug(f"Database connection details: host={connection_info.host}, port={connection_info.port}, user={connection_info.username}, database={connection_info.database}")
 
         # Collect market data
         data = await collect_market_data()
