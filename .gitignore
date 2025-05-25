@@ -69,3 +69,4 @@ Thumbs.db
 tradingsystem.egg-info/
 .cursor/
 /src/archive
+test_db_connection.py

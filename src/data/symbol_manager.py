@@ -23,8 +23,8 @@ class SymbolManager:
             # Load database connector from Prefect block
             connector = SqlAlchemyConnector.load("tradingsystemdb")
             
-            # Get connection info for logging
-            connection_info = connector.get_connection_info()
+            # Get connection info
+            connection_info = connector.connection_info
             
             # Set environment variables for backward compatibility
             os.environ["DB_USER"] = connection_info["username"]
