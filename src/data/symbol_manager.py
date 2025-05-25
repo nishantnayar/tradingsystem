@@ -21,11 +21,11 @@ class SymbolManager:
         """Ensure database credentials are set in environment variables."""
         try:
             # Get database credentials from Prefect secrets
-            db_user = await Secret.load("db-user")
-            db_password = await Secret.load("db-password")
-            db_host = await Secret.load("db-host")
-            db_port = await Secret.load("db-port")
-            db_name = await Secret.load("db-name")
+            db_user = (await Secret.load("db-user")).get()
+            db_password = (await Secret.load("db-password")).get()
+            db_host = (await Secret.load("db-host")).get()
+            db_port = (await Secret.load("db-port")).get()
+            db_name = (await Secret.load("db-name")).get()
 
             # Set environment variables
             os.environ["DB_USER"] = str(db_user)
