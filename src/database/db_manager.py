@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from loguru import logger
-from prefect_sqlalchemy import SqlAlchemyConnector
+from dotenv import load_dotenv
 
 from src.database.models import Base
 
@@ -32,23 +32,46 @@ class DatabaseManager:
         if self._initialized:
             return
 
+        self.config_path = str(Path(__file__).parent.parent.parent / "config" / "config.yaml")
         self.engine = None
         self.SessionLocal = None
-        self._initialized = True
+
+        # Load environment variables from .env file
+        env_path = Path(__file__).parent.parent.parent / "config" / ".env"
+        load_dotenv(env_path)
+
+        self._load_config()
         self._initialize_connection()
+        self._initialized = True
+
+    def _load_config(self) -> None:
+        """Load database configuration from YAML file."""
+        try:
+            with open(self.config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                self.db_config = config['database']
+
+            # Replace environment variables
+            self.db_config['user'] = os.getenv('DB_USER', self.db_config['user'])
+            self.db_config['password'] = os.getenv('DB_PASSWORD', self.db_config['password'])
+
+        except Exception as e:
+            logger.error(f"Failed to load database configuration: {e}")
+            raise
 
     def _initialize_connection(self) -> None:
         """Initialize database connection and session factory."""
         try:
-            # Load database connector from Prefect block
-            connector = SqlAlchemyConnector.load("tradingsystemdb")
-            
-            logger.debug(f"Connecting to database using SqlAlchemyConnector")
+            connection_string = (
+                f"postgresql://{self.db_config['user']}:{self.db_config['password']}@"
+                f"{self.db_config['host']}:{self.db_config['port']}/{self.db_config['name']}"
+            )
 
-            self.engine = connector.get_engine(
+            self.engine = create_engine(
+                connection_string,
                 poolclass=QueuePool,
-                pool_size=5,
-                max_overflow=10,
+                pool_size=self.db_config.get('pool_size', 5),
+                max_overflow=self.db_config.get('max_overflow', 10),
                 pool_timeout=30,
                 pool_recycle=1800
             )
@@ -69,13 +92,13 @@ class DatabaseManager:
     def get_session(self) -> Generator[Session, None, None]:
         """
         Get a database session with automatic cleanup.
-        
+
         Yields:
             Session: SQLAlchemy session object
         """
         if not self.SessionLocal:
             raise RuntimeError("Database connection not initialized")
-        
+
         session = self.SessionLocal()
         try:
             yield session
@@ -90,7 +113,7 @@ class DatabaseManager:
     def test_connection(self) -> bool:
         """
         Test the database connection.
-        
+
         Returns:
             bool: True if connection is successful, False otherwise
         """
@@ -108,7 +131,7 @@ class DatabaseManager:
         try:
             Base.metadata.create_all(self.engine)
             logger.info("Database tables created successfully")
-            
+
             # Add unique constraint if it doesn't exist
             self._add_unique_constraint()
         except Exception as e:
