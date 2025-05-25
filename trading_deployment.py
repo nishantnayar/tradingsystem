@@ -82,16 +82,18 @@ def data_ingestion_subflow():
         db_user = Secret.load("db-user").get()
         db_password = Secret.load("db-password").get()
         db_host = Secret.load("db-host").get()
-        db_port = Secret.load("db-port").get()
+        db_port = str(Secret.load("db-port").get())  # Convert to string
         db_name = Secret.load("db-name").get()
 
         # Set environment variables for database connection
         import os
-        os.environ["DB_USER"] = db_user
-        os.environ["DB_PASSWORD"] = db_password
-        os.environ["DB_HOST"] = db_host
-        os.environ["DB_PORT"] = db_port
-        os.environ["DB_NAME"] = db_name
+        os.environ["DB_USER"] = str(db_user)
+        os.environ["DB_PASSWORD"] = str(db_password)
+        os.environ["DB_HOST"] = str(db_host)
+        os.environ["DB_PORT"] = str(db_port)  # Ensure it's a string
+        os.environ["DB_NAME"] = str(db_name)
+
+        logger.debug("Database credentials loaded from Prefect secrets")
 
         # Collect market data
         data = collect_market_data()

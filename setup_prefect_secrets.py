@@ -14,11 +14,11 @@ def setup_prefect_secrets():
 
     # Create Prefect secrets
     secrets = {
-        "db-user": db_config['user'],
-        "db-password": db_config['password'],
-        "db-host": db_config['host'],
-        "db-port": str(db_config['port']),
-        "db-name": db_config['name']
+        "db-user": str(db_config['user']),
+        "db-password": str(db_config['password']),
+        "db-host": str(db_config['host']),
+        "db-port": str(db_config['port']),  # Ensure port is stored as string
+        "db-name": str(db_config['name'])
     }
 
     # Save secrets to Prefect
