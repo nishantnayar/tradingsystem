@@ -43,15 +43,15 @@ def generate_flow_run_name(flow_prefix: str) -> str:
     return f"{flow_prefix}-{timestamp}-{env}-{context}"
 
 
-def ensure_db_credentials():
+async def ensure_db_credentials():
     """Ensure database credentials are set in environment variables."""
     try:
         # Get database credentials from Prefect secrets
-        db_user = Secret.load("db-user").get()
-        db_password = Secret.load("db-password").get()
-        db_host = Secret.load("db-host").get()
-        db_port = str(Secret.load("db-port").get())
-        db_name = Secret.load("db-name").get()
+        db_user = await Secret.load("db-user").get()
+        db_password = await Secret.load("db-password").get()
+        db_host = await Secret.load("db-host").get()
+        db_port = str(await Secret.load("db-port").get())
+        db_name = await Secret.load("db-name").get()
 
         # Set environment variables
         os.environ["DB_USER"] = str(db_user)
@@ -67,16 +67,16 @@ def ensure_db_credentials():
 
 
 @task(retries=3, retry_delay_seconds=60)
-def collect_market_data() -> dict:
+async def collect_market_data() -> dict:
     """Task to collect market data for all active symbols."""
     logger.info("Starting data collection")
     
     try:
         # Ensure database credentials are set
-        ensure_db_credentials()
+        await ensure_db_credentials()
         
         # Get active symbols
-        symbols = SymbolManager.get_active_symbols()
+        symbols = await SymbolManager.get_active_symbols()
         logger.debug(f"Retrieved active symbols: {symbols}")  # Debug log
         if not symbols:
             logger.warning("No active symbols found")
@@ -114,7 +114,7 @@ def collect_market_data() -> dict:
 
 
 @task
-def store_market_data(data: dict):
+async def store_market_data(data: dict):
     """Task to store collected market data in the database."""
     if not data:
         logger.warning("No data to store")
@@ -122,7 +122,7 @@ def store_market_data(data: dict):
 
     try:
         # Ensure database credentials are set
-        ensure_db_credentials()
+        await ensure_db_credentials()
         
         db = DatabaseManager()
         with db.get_session() as session:

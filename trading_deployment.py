@@ -72,18 +72,18 @@ def generate_flow_run_name(flow_prefix: str) -> str:
 
 
 @flow(flow_run_name=lambda: generate_flow_run_name("data-ingestion"))
-def data_ingestion_subflow():
+async def data_ingestion_subflow():
     """Main flow for data ingestion."""
     logger = get_run_logger()
     logger.info("Starting data ingestion flow...")
 
     try:
         # Get database credentials from Prefect secrets
-        db_user = Secret.load("db-user").get()
-        db_password = Secret.load("db-password").get()
-        db_host = Secret.load("db-host").get()
-        db_port = str(Secret.load("db-port").get())  # Convert to string
-        db_name = Secret.load("db-name").get()
+        db_user = await Secret.load("db-user").get()
+        db_password = await Secret.load("db-password").get()
+        db_host = await Secret.load("db-host").get()
+        db_port = str(await Secret.load("db-port").get())
+        db_name = await Secret.load("db-name").get()
 
         # Set environment variables for database connection
         import os
@@ -97,10 +97,10 @@ def data_ingestion_subflow():
         logger.debug(f"Database connection details: host={db_host}, port={db_port}, user={db_user}, database={db_name}")
 
         # Collect market data
-        data = collect_market_data()
+        data = await collect_market_data()
         
         # Store market data
-        store_market_data(data)
+        await store_market_data(data)
         
         logger.info("Data ingestion flow completed successfully")
     except Exception as e:
