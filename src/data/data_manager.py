@@ -23,19 +23,19 @@ async def ensure_db_credentials():
     """Ensure database credentials are set in environment variables."""
     try:
         # Load database connector from Prefect block
-        connector = SqlAlchemyConnector.load("tradingsystemdb")
+        connector = await SqlAlchemyConnector.load("tradingsystemdb")
         
         # Get connection info
         connection_info = connector.connection_info
         
         # Set environment variables for backward compatibility
-        os.environ["DB_USER"] = connection_info["username"]
-        os.environ["DB_PASSWORD"] = connection_info["password"]
-        os.environ["DB_HOST"] = connection_info["host"]
-        os.environ["DB_PORT"] = str(connection_info["port"])
-        os.environ["DB_NAME"] = connection_info["database"]
+        os.environ["DB_USER"] = str(connection_info.username)
+        os.environ["DB_PASSWORD"] = str(connection_info.password)
+        os.environ["DB_HOST"] = str(connection_info.host)
+        os.environ["DB_PORT"] = str(connection_info.port)
+        os.environ["DB_NAME"] = str(connection_info.database)
 
-        logger.debug(f"Database credentials set for host={connection_info['host']}, port={connection_info['port']}, user={connection_info['username']}, database={connection_info['database']}")
+        logger.debug(f"Database credentials set for host={connection_info.host}, port={connection_info.port}, user={connection_info.username}, database={connection_info.database}")
     except Exception as e:
         logger.error(f"Failed to set database credentials: {e}")
         raise
