@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from loguru import logger
-from dotenv import load_dotenv
+from prefect_sqlalchemy import SqlAlchemyConnector
 
 from src.database.models import Base
 
@@ -40,32 +40,12 @@ class DatabaseManager:
     def _initialize_connection(self) -> None:
         """Initialize database connection and session factory."""
         try:
-            # Get database credentials from environment variables
-            db_user = os.getenv('DB_USER')
-            db_password = os.getenv('DB_PASSWORD')
-            db_host = os.getenv('DB_HOST')
-            db_port = os.getenv('DB_PORT')
-            db_name = os.getenv('DB_NAME')
+            # Load database connector from Prefect block
+            connector = SqlAlchemyConnector.load("tradingsystemdb")
+            
+            logger.debug(f"Connecting to database using SqlAlchemyConnector")
 
-            if not all([db_user, db_password, db_host, db_port, db_name]):
-                raise ValueError("Missing database configuration in environment variables")
-
-            # Convert port to integer
-            try:
-                db_port = int(db_port)
-            except (ValueError, TypeError) as e:
-                logger.error(f"Invalid port number: {db_port}")
-                raise ValueError(f"Invalid port number: {db_port}") from e
-
-            logger.debug(f"Connecting to database at {db_host}:{db_port}")
-
-            connection_string = (
-                f"postgresql://{db_user}:{db_password}@"
-                f"{db_host}:{db_port}/{db_name}"
-            )
-
-            self.engine = create_engine(
-                connection_string,
+            self.engine = connector.get_engine(
                 poolclass=QueuePool,
                 pool_size=5,
                 max_overflow=10,

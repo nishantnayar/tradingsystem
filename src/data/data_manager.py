@@ -3,7 +3,7 @@ from typing import List, Optional, Dict
 import os
 import platform
 import sys
-from prefect.blocks.system import Secret
+from prefect_sqlalchemy import SqlAlchemyConnector
 
 from loguru import logger
 from prefect import flow, task
@@ -22,21 +22,20 @@ from src.database.models import MarketData
 async def ensure_db_credentials():
     """Ensure database credentials are set in environment variables."""
     try:
-        # Get database credentials from Prefect secrets
-        db_user = (await Secret.load("db-user")).get()
-        db_password = (await Secret.load("db-password")).get()
-        db_host = (await Secret.load("db-host")).get()
-        db_port = (await Secret.load("db-port")).get()
-        db_name = (await Secret.load("db-name")).get()
+        # Load database connector from Prefect block
+        connector = SqlAlchemyConnector.load("tradingsystemdb")
+        
+        # Get connection info for logging
+        connection_info = connector.get_connection_info()
+        
+        # Set environment variables for backward compatibility
+        os.environ["DB_USER"] = connection_info["username"]
+        os.environ["DB_PASSWORD"] = connection_info["password"]
+        os.environ["DB_HOST"] = connection_info["host"]
+        os.environ["DB_PORT"] = str(connection_info["port"])
+        os.environ["DB_NAME"] = connection_info["database"]
 
-        # Set environment variables
-        os.environ["DB_USER"] = str(db_user)
-        os.environ["DB_PASSWORD"] = str(db_password)
-        os.environ["DB_HOST"] = str(db_host)
-        os.environ["DB_PORT"] = str(db_port)
-        os.environ["DB_NAME"] = str(db_name)
-
-        logger.debug(f"Database credentials set for host={db_host}, port={db_port}, user={db_user}, database={db_name}")
+        logger.debug(f"Database credentials set for host={connection_info['host']}, port={connection_info['port']}, user={connection_info['username']}, database={connection_info['database']}")
     except Exception as e:
         logger.error(f"Failed to set database credentials: {e}")
         raise
