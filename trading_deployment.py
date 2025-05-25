@@ -61,6 +61,8 @@
 from datetime import datetime
 from prefect import flow, get_run_logger
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.blocks.system import Secret
+from prefect.context import get_run_context
 
 from src.data.data_manager import collect_market_data, store_market_data
 
@@ -75,13 +77,32 @@ def data_ingestion_subflow():
     logger = get_run_logger()
     logger.info("Starting data ingestion flow...")
 
-    # Collect market data
-    data = collect_market_data()
+    try:
+        # Get database credentials from Prefect secrets
+        db_user = Secret.load("db-user").get()
+        db_password = Secret.load("db-password").get()
+        db_host = Secret.load("db-host").get()
+        db_port = Secret.load("db-port").get()
+        db_name = Secret.load("db-name").get()
 
-    # Store market data
-    store_market_data(data)
+        # Set environment variables for database connection
+        import os
+        os.environ["DB_USER"] = db_user
+        os.environ["DB_PASSWORD"] = db_password
+        os.environ["DB_HOST"] = db_host
+        os.environ["DB_PORT"] = db_port
+        os.environ["DB_NAME"] = db_name
 
-    logger.info("Data ingestion flow completed successfully")
+        # Collect market data
+        data = collect_market_data()
+        
+        # Store market data
+        store_market_data(data)
+        
+        logger.info("Data ingestion flow completed successfully")
+    except Exception as e:
+        logger.error(f"Error in data ingestion flow: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
