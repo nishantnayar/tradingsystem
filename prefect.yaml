@@ -1,0 +1,51 @@
+# Welcome to your prefect.yaml file! You can use this file for storing and managing
+# configuration for deploying your flows. We recommend committing this file to source
+# control along with your flow code.
+
+# Generic metadata about this project
+name: Trading
+prefect-version: 3.0.0
+
+# build section allows you to manage and build docker images
+build:
+
+# push section allows you to manage if and how this project is uploaded to remote locations
+push:
+
+# pull section allows you to provide instructions for cloning this project in remote locations
+pull:
+- prefect.deployments.steps.git_clone:
+    repository: https://github.com/nishantnayar/Trading.git
+    branch: master
+    access_token: '{{ prefect.blocks.secret.deployment-token}}'
+
+# the deployments section allows you to provide configuration for deploying flows
+deployments:
+- name: MarketDataCollection
+  version: 1.0.0
+  tags: ["hourly", "data-collection"]
+  description: Hourly market data collection and processing flow
+  entrypoint: src/flows/hourly_data_collection.py:hourly_data_collection_flow
+  work_pool:
+    name: trading
+    work_queue_name: trading
+  schedules:
+  - cron: "0 * * * *"  # Run every hour
+    timezone: UTC
+    active: true
+
+- name: DailyMaintenance
+  version: 1.0.0
+  tags: ["daily", "maintenance"]
+  description: Daily maintenance and model retraining flow
+  entrypoint: src/flows/flows.py:trading_system_flow
+  parameters:
+    run_hourly: false
+    run_daily: true
+  work_pool:
+    name: maintenance
+    work_queue_name: maintenance
+  schedules:
+  - cron: "0 0 * * *"  # Run at midnight every day
+    timezone: UTC
+    active: true 

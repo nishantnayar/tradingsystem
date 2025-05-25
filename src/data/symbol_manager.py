@@ -60,10 +60,13 @@ class SymbolManager:
     @staticmethod
     def get_active_symbols() -> List[str]:
         """Get list of active symbols."""
+        logger.debug("Retrieving active symbols from database")
         db = DatabaseManager()
         with db.get_session() as session:
             symbols = session.query(Symbol).filter_by(is_active=True).all()
-            return [s.symbol for s in symbols]
+            symbol_list = [s.symbol for s in symbols]
+            logger.debug(f"Found {len(symbol_list)} active symbols: {symbol_list}")
+            return symbol_list
 
     @staticmethod
     def get_symbol_info(symbol: str) -> Optional[Symbol]:

@@ -1,0 +1,19 @@
+work_pools:
+  trading_system:
+    name: "trading-system-pool"
+    description: "Work pool for trading system flows"
+    type: "process"
+    concurrency_limit: 3
+    base_job_template:
+      job_configuration:
+        env:
+          PYTHONPATH: "${PYTHONPATH}:${PWD}"
+        working_dir: "${PWD}"
+      variables:
+        properties:
+          name:
+            type: "string"
+            default: "trading-system-worker"
+          work_queue:
+            type: "string"
+            default: "trading-system-queue" 

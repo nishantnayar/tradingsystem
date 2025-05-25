@@ -1,0 +1,27 @@
+# Build dependencies
+setuptools==65.5.1
+wheel==0.38.4
+
+# Core dependencies
+prefect==3.4.0
+pydantic==2.11.5
+pydantic-core==2.33.2
+pydantic-extra-types==2.10.4
+pydantic-settings==2.9.1
+sqlalchemy==2.0.23
+alembic==1.12.1
+Mako==1.2.4
+python-dateutil==2.8.2
+prefect-dask==0.3.5
+prefect-sqlalchemy==0.5.3
+prefect-email==0.4.2
+email-validator==2.2.0
+psycopg2-binary==2.9.9
+pandas==1.5.3
+numpy==1.24.3
+python-dotenv==1.0.0
+pyyaml==6.0.1
+loguru==0.7.2
+alpaca-py==0.40.1
+yfinance==0.2.31
+streamlit==1.32.0

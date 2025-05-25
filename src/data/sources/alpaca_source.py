@@ -14,6 +14,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 
 from src.data.sources.base import DataSource
 from src.utils.config import get_config
+from src.utils.market_hours import MarketHoursManager
 
 
 class AlpacaDataSource(DataSource):
@@ -27,6 +28,7 @@ class AlpacaDataSource(DataSource):
             secret_key=alpaca_config["secret_key"],
             raw_data=True  # Get raw data for better performance
         )
+        self.market_hours = MarketHoursManager()
 
     def get_historical_data(
         self,
@@ -69,16 +71,27 @@ class AlpacaDataSource(DataSource):
         self,
         symbol: str,
         interval: str = "1h",
-        lookback_days: int = 1  # Default to 1 year of data
+        lookback_days: int = 10  # Default to 1 day of data
     ) -> pd.DataFrame:
         """Get the latest data from Alpaca.
         
         Args:
             symbol: The stock symbol
             interval: Data interval (e.g., "1h", "1d")
-            lookback_days: Number of days of historical data to fetch (default: 365)
+            lookback_days: Number of days of historical data to fetch (default: 1)
         """
         end_date = datetime.now(timezone.utc)
+        
+        # If market is closed, adjust end_date to last market close
+        if not self.market_hours.is_market_open():
+            market_hours = self.market_hours.get_market_hours(end_date)
+            if market_hours:
+                end_date = market_hours["close"]
+            else:
+                # If we can't get market hours, use previous day's close
+                end_date = end_date - timedelta(days=1)
+                end_date = end_date.replace(hour=16, minute=0, second=0, microsecond=0)
+        
         start_date = end_date - timedelta(days=lookback_days)
         return self.get_historical_data(symbol, start_date, end_date, interval)
 
@@ -86,17 +99,24 @@ class AlpacaDataSource(DataSource):
         self,
         symbols: List[str],
         interval: str = "1h",
-        lookback_days: int = 1  # Default to 1 year of data
+        lookback_days: int = 10  # Default to 1 day of data
     ) -> Dict[str, pd.DataFrame]:
-        """Get data for multiple symbols from Alpaca.
-        
-        Args:
-            symbols: List of stock symbols
-            interval: Data interval (e.g., "1h", "1d")
-            lookback_days: Number of days of historical data to fetch (default: 365)
-        """
+        """Get data for multiple symbols from Alpaca."""
+        logger.debug(f"Getting data for symbols: {symbols}")
         end_date = datetime.now(timezone.utc)
+        
+        # If market is closed, adjust end_date to last market close
+        if not self.market_hours.is_market_open():
+            market_hours = self.market_hours.get_market_hours(end_date)
+            if market_hours:
+                end_date = market_hours["close"]
+            else:
+                # If we can't get market hours, use previous day's close
+                end_date = end_date - timedelta(days=1)
+                end_date = end_date.replace(hour=16, minute=0, second=0, microsecond=0)
+        
         start_date = end_date - timedelta(days=lookback_days)
+        logger.debug(f"Date range: {start_date} to {end_date}")
         
         request_params = StockBarsRequest(
             symbol_or_symbols=symbols,
@@ -107,12 +127,16 @@ class AlpacaDataSource(DataSource):
         )
         
         try:
+            logger.debug("Making API request to Alpaca...")
             bars = self.client.get_stock_bars(request_params)
+            logger.debug(f"Received response from Alpaca for {len(symbols)} symbols")
+            
             # Convert the response to a dictionary of DataFrames
             result = {}
             for symbol in symbols:
                 if symbol in bars:
                     df = pd.DataFrame(bars[symbol])
+                    logger.debug(f"Got data for {symbol}: {len(df)} rows")
                     
                     # Add symbol column and reset index
                     df.insert(0, "symbol", symbol)
@@ -207,40 +231,39 @@ class AlpacaDataSource(DataSource):
     def _standardize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize column names to match our expected format."""
         if df.empty:
+            logger.debug("Empty DataFrame received in _standardize_columns")
             return df
             
-        # Create a list to store the standardized data
-        standardized_data = []
-        
-        # Get the symbol column if it exists
-        symbol_column = None
-        for col in df.columns:
-            if col != 'symbol' and col != 'timestamp' and col != 'index':
-                symbol_column = col
-                break
-        
-        if symbol_column is None:
-            logger.error("No symbol data column found in DataFrame")
-            return pd.DataFrame()
+        logger.debug(f"Input DataFrame columns: {df.columns.tolist()}")
+        logger.debug(f"Input DataFrame head:\n{df.head()}")
             
-        # Extract data from each row
-        for idx, row in df.iterrows():
-            if isinstance(row[symbol_column], dict):
-                data_point = {
-                    'open': row[symbol_column].get('o', 0),
-                    'high': row[symbol_column].get('h', 0),
-                    'low': row[symbol_column].get('l', 0),
-                    'close': row[symbol_column].get('c', 0),
-                    'volume': row[symbol_column].get('v', 0),
-                    'trade_count': row[symbol_column].get('n', 0),
-                    'vwap': row[symbol_column].get('vw', 0),
-                    'timestamp': row[symbol_column].get('t', 0),
-                    'symbol': row['symbol'] if 'symbol' in row else symbol_column
-                }
-                standardized_data.append(data_point)
+        # Create a mapping for the single-letter columns
+        column_map = {
+            'o': 'open',
+            'h': 'high',
+            'l': 'low',
+            'c': 'close',
+            'v': 'volume',
+            'n': 'trade_count',
+            'vw': 'vwap',
+            't': 'timestamp'
+        }
         
-        # Create DataFrame from the standardized data
-        standardized_df = pd.DataFrame(standardized_data)
+        # Create a new DataFrame with standardized column names
+        standardized_df = df.copy()
+        
+        # Rename columns if they exist
+        for old_col, new_col in column_map.items():
+            if old_col in standardized_df.columns:
+                standardized_df[new_col] = standardized_df[old_col]
+                logger.debug(f"Renamed column {old_col} to {new_col}")
+        
+        # Ensure all required columns exist
+        required_columns = ['open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap']
+        for col in required_columns:
+            if col not in standardized_df.columns:
+                standardized_df[col] = 0
+                logger.debug(f"Added missing column: {col}")
         
         # Set timestamp as index if it exists
         if 'timestamp' in standardized_df.columns:
@@ -249,14 +272,15 @@ class AlpacaDataSource(DataSource):
                 standardized_df['timestamp'] = pd.to_datetime(standardized_df['timestamp'])
                 # Set as index
                 standardized_df.set_index('timestamp', inplace=True)
+                logger.debug("Successfully set timestamp as index")
             except (ValueError, TypeError) as e:
                 logger.error(f"Failed to convert timestamp: {e}")
+                logger.debug(f"Timestamp column data: {standardized_df['timestamp'].head()}")
                 return pd.DataFrame()
         
-        # Add missing columns with default values
-        required_columns = ['open', 'high', 'low', 'close', 'volume', 'trade_count', 'vwap']
-        for col in required_columns:
-            if col not in standardized_df.columns:
-                standardized_df[col] = 0
+        # Keep only the required columns
+        standardized_df = standardized_df[required_columns]
         
+        logger.debug(f"Final DataFrame shape: {standardized_df.shape}")
+        logger.debug(f"Final DataFrame columns: {standardized_df.columns.tolist()}")
         return standardized_df 

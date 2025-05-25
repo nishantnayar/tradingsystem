@@ -6,77 +6,43 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from loguru import logger
 
 from src.data.data_manager import DataManager
 from src.data.symbol_manager import SymbolManager
+from src.ui.components.market_status import display_market_status
+from src.ui.components.symbol_selector import display_symbol_selector
+from src.ui.components.data_display import display_market_data
+from src.ui.components.chart_display import display_chart
 
 
 def render_home():
-    """Render the home page with market overview."""
+    """Render the home page of the trading system."""
     st.title("Trading System Dashboard")
     
-    # Sidebar filters
-    with st.sidebar:
-        st.header("Filters")
-        
-        # Date range selector
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=7)
-        date_range = st.date_input(
-            "Date Range",
-            value=(start_date, end_date),
-            max_value=end_date
-        )
-        
-        # Symbol selector
-        symbols = SymbolManager.get_active_symbols()
-        selected_symbols = st.multiselect(
-            "Select Symbols",
-            options=symbols,
-            default=symbols[:5] if symbols else []
-        )
+    # Display market status at the top
+    display_market_status()
     
-    # Main content area with tabs
-    tab1, tab2, tab3 = st.tabs(["Market Overview", "Portfolio", "Analysis"])
+    # Add a separator
+    st.markdown("---")
     
-    with tab1:
-        st.header("Market Overview")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Active Symbols")
-            st.write(f"Total Active Symbols: {len(symbols)}")
+    # Create two columns for symbol selection and data display
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.subheader("Symbol Selection")
+        selected_symbol = display_symbol_selector()
+    
+    with col2:
+        if selected_symbol:
+            st.subheader(f"Market Data for {selected_symbol}")
+            display_market_data(selected_symbol)
             
-            # Display symbol list
-            if symbols:
-                symbol_df = pd.DataFrame({
-                    'Symbol': symbols,
-                    'Status': ['Active'] * len(symbols)
-                })
-                st.dataframe(symbol_df, use_container_width=True)
-        
-        with col2:
-            st.subheader("Market Status")
-            st.metric("Market Hours", "Open" if is_market_open() else "Closed")
-            st.metric("Last Update", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    
-    with tab2:
-        st.header("Portfolio Overview")
-        # Placeholder for portfolio metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Value", "$100,000", "+2.5%")
-        with col2:
-            st.metric("Daily P&L", "$2,500", "+2.5%")
-        with col3:
-            st.metric("Open Positions", "5", "0")
-    
-    with tab3:
-        st.header("Market Analysis")
-        if selected_symbols:
-            # Create a sample price chart
-            fig = create_price_chart(selected_symbols[0])
-            st.plotly_chart(fig, use_container_width=True)
+            # Display chart below the data
+            st.subheader("Price Chart")
+            display_chart(selected_symbol)
+        else:
+            st.info("Please select a symbol to view market data")
 
 
 def is_market_open() -> bool:
