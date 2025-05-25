@@ -50,6 +50,13 @@ class DatabaseManager:
             if not all([db_user, db_password, db_host, db_port, db_name]):
                 raise ValueError("Missing database configuration in environment variables")
 
+            # Convert port to integer
+            try:
+                db_port = int(db_port)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid port number: {db_port}")
+                raise ValueError(f"Invalid port number: {db_port}") from e
+
             logger.debug(f"Connecting to database at {db_host}:{db_port}")
 
             connection_string = (
