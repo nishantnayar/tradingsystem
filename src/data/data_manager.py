@@ -63,7 +63,7 @@ def collect_market_data() -> dict:
         data = alpaca_source.get_multiple_symbols(
             symbols=symbols,
             interval="1h",  # Hourly data
-            lookback_days=10  # Get last 24 hours of data
+            lookback_days=1  # Get last 24 hours of data
         )
 
         # Detailed logging for collected data
@@ -100,13 +100,8 @@ def store_market_data(data: dict):
                 logger.warning(f"No data to store for symbol {symbol}")
                 continue
 
-            logger.debug(f"Processing data for {symbol}")
-            logger.debug(f"DataFrame info:\n{df.info()}")
-            logger.debug(f"DataFrame head:\n{df.head()}")
-
             # Reset index to make timestamp a column
             df = df.reset_index()
-            logger.debug(f"DataFrame after reset_index:\n{df.head()}")
 
             for _, row in df.iterrows():
                 try:
@@ -138,7 +133,6 @@ def store_market_data(data: dict):
                         'volume': int(row['volume'])
                     }
 
-                    logger.debug(f"Executing SQL with params: {params}")
                     session.execute(stmt, params)
 
                 except Exception as e:

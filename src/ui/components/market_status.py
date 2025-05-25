@@ -2,8 +2,10 @@ from datetime import datetime, timezone
 import streamlit as st
 from loguru import logger
 from pytz import timezone as pytz_timezone
+from typing import Optional, Dict, Any
 
 from src.utils.market_hours import MarketHoursManager
+from src.ui.components.date_display import format_datetime_est_to_cst
 
 
 def get_ordinal_suffix(day):
@@ -35,48 +37,81 @@ def format_datetime_cst(dt):
     return f"{day}{suffix} {month}, {year} {hour}:{minute} {ampm}"
 
 
-def display_market_status():
+def display_market_status_section(is_open: bool, current_time: datetime) -> None:
+    """Display the market status section.
+    
+    Args:
+        is_open: Whether the market is currently open
+        current_time: Current time in UTC
+    """
+    st.subheader("Market Status")
+    
+    if is_open:
+        st.success("Market is OPEN")
+    else:
+        st.error("Market is CLOSED")
+    
+    st.write(f"Current Time: {format_datetime_est_to_cst(current_time)}")
+
+
+def display_next_events(next_open: Optional[datetime], next_close: Optional[datetime]) -> None:
+    """Display next market events.
+    
+    Args:
+        next_open: Next market open time
+        next_close: Next market close time
+    """
+    st.subheader("Next Events")
+    
+    if next_open:
+        st.write(f"Next Open: {format_datetime_est_to_cst(next_open)}")
+    if next_close:
+        st.write(f"Next Close: {format_datetime_est_to_cst(next_close)}")
+
+
+def display_market_hours(hours: Optional[Dict[str, datetime]]) -> None:
+    """Display today's market hours.
+    
+    Args:
+        hours: Dictionary containing market open and close times
+    """
+    st.subheader("Today's Market Hours")
+    
+    if hours:
+        col1, col2 = st.columns(2)
+        with col1:
+            time_str = format_datetime_est_to_cst(hours['open']).split(', ')[-1]
+            st.write(f"Open: {time_str}")
+        with col2:
+            time_str = format_datetime_est_to_cst(hours['close']).split(', ')[-1]
+            st.write(f"Close: {time_str}")
+    else:
+        st.warning("No market hours available for today")
+
+
+def display_market_status() -> None:
     """Display current market status and hours with times in CST."""
     try:
         market_hours = MarketHoursManager()
-
+        current_time = datetime.now(timezone.utc)
+        
+        # Create two columns for status and next events
         col1, col2 = st.columns(2)
-
+        
         with col1:
-            st.subheader("Market Status")
-            is_open = market_hours.is_market_open()
-
-            if is_open:
-                st.success("Market is OPEN")
-            else:
-                st.error("Market is CLOSED")
-
-            current_time = datetime.now(timezone.utc)
-            st.write(f"Current Time: {format_datetime_cst(current_time)}")
-
+            display_market_status_section(
+                market_hours.is_market_open(),
+                current_time
+            )
+        
         with col2:
-            st.subheader("Next Events")
-            next_open = market_hours.get_next_market_open()
-            next_close = market_hours.get_next_market_close()
-
-            if next_open:
-                st.write(f"Next Open: {format_datetime_cst(next_open)}")
-            if next_close:
-                st.write(f"Next Close: {format_datetime_cst(next_close)}")
-
-        st.subheader("Today's Market Hours")
-        hours = market_hours.get_market_hours()
-
-        if hours:
-            col3, col4 = st.columns(2)
-            with col3:
-                time_str = format_datetime_cst(hours['open']).split(', ')[-1]
-                st.write(f"Open: {time_str}")
-            with col4:
-                time_str = format_datetime_cst(hours['close']).split(', ')[-1]
-                st.write(f"Close: {time_str}")
-        else:
-            st.warning("No market hours available for today")
+            display_next_events(
+                market_hours.get_next_market_open(),
+                market_hours.get_next_market_close()
+            )
+        
+        # Display market hours
+        display_market_hours(market_hours.get_market_hours())
 
     except Exception as e:
         logger.error(f"Error displaying market status: {e}")

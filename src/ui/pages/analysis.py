@@ -3,13 +3,13 @@ Analysis page for technical analysis and backtesting.
 """
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from loguru import logger
+from sqlalchemy import text
 
-from plotly.subplots import make_subplots
-
-from src.data.data_manager import DataManager
 from src.data.symbol_manager import SymbolManager
+from src.ui.components.chart_display import display_chart
+from src.database.db_manager import DatabaseManager
 
 
 def render_analysis():
@@ -62,30 +62,43 @@ def render_analysis():
             st.header(f"Technical Analysis: {selected_symbol}")
             
             # Get data
-            data_manager = DataManager()
-            data = data_manager.get_latest_data(selected_symbol)
-            
-            if data is not None and not data.empty:
-                # Create price chart with indicators
-                fig = create_analysis_chart(
-                    data,
-                    show_sma=show_sma,
-                    sma_period=sma_period if show_sma else None,
-                    show_rsi=show_rsi,
-                    rsi_period=rsi_period if show_rsi else None
+            db = DatabaseManager()
+            with db.get_session() as session:
+                query = text("""
+                    SELECT timestamp, open, high, low, close, volume
+                    FROM market_data
+                    WHERE symbol = :symbol
+                    AND timestamp > '2025-01-01'
+                    ORDER BY timestamp DESC
+                """)
+
+                result = session.execute(query, {'symbol': selected_symbol})
+                data = pd.DataFrame(
+                    result.fetchall(),
+                    columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
                 )
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Display technical metrics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Current Price", f"${data['close'].iloc[-1]:.2f}")
-                with col2:
-                    st.metric("24h Change", f"{((data['close'].iloc[-1] / data['close'].iloc[-2] - 1) * 100):.2f}%")
-                with col3:
-                    st.metric("Volume", f"{data['volume'].iloc[-1]:,}")
-            else:
-                st.warning(f"No data available for {selected_symbol}")
+
+                if data is not None and not data.empty:
+                    # Display technical metrics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Current Price", f"${data['close'].iloc[-1]:.2f}")
+                    with col2:
+                        st.metric("24h Change", f"{((data['close'].iloc[-1] / data['close'].iloc[-2] - 1) * 100):.2f}%")
+                    with col3:
+                        st.metric("Volume", f"{data['volume'].iloc[-1]:,}")
+
+                    # Configure indicators based on sidebar settings
+                    indicators = {}
+                    if show_sma:
+                        indicators['sma'] = {'period': sma_period}
+                    if show_rsi:
+                        indicators['rsi'] = {'period': rsi_period}
+
+                    # Display chart with selected indicators
+                    display_chart(selected_symbol, indicators=indicators)
+                else:
+                    st.warning(f"No data available for {selected_symbol}")
     
     with tab2:
         st.header("Backtesting")
@@ -102,82 +115,4 @@ def render_analysis():
             st.subheader("Performance Metrics")
             st.metric("Total Return", "+25.5%")
             st.metric("Sharpe Ratio", "1.8")
-            st.metric("Max Drawdown", "-12.3%")
-
-
-def create_analysis_chart(
-    data: pd.DataFrame,
-    show_sma: bool = True,
-    sma_period: int = 20,
-    show_rsi: bool = True,
-    rsi_period: int = 14
-) -> go.Figure:
-    """Create a technical analysis chart with indicators."""
-    # Create figure with secondary y-axis
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.05,
-        row_heights=[0.7, 0.3]
-    )
-    
-    # Add candlestick chart
-    fig.add_trace(
-        go.Candlestick(
-            x=data.index,
-            open=data['open'],
-            high=data['high'],
-            low=data['low'],
-            close=data['close'],
-            name="Price"
-        ),
-        row=1, col=1
-    )
-    
-    # Add SMA if enabled
-    if show_sma:
-        sma = data['close'].rolling(window=sma_period).mean()
-        fig.add_trace(
-            go.Scatter(
-                x=data.index,
-                y=sma,
-                name=f"SMA {sma_period}",
-                line=dict(color='blue')
-            ),
-            row=1, col=1
-        )
-    
-    # Add RSI if enabled
-    if show_rsi:
-        # Calculate RSI
-        delta = data['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        fig.add_trace(
-            go.Scatter(
-                x=data.index,
-                y=rsi,
-                name=f"RSI {rsi_period}",
-                line=dict(color='purple')
-            ),
-            row=2, col=1
-        )
-        
-        # Add RSI levels
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-    
-    # Update layout
-    fig.update_layout(
-        title="Technical Analysis",
-        xaxis_title="Date",
-        yaxis_title="Price",
-        height=800,
-        showlegend=True
-    )
-    
-    return fig 
+            st.metric("Max Drawdown", "-12.3%") 

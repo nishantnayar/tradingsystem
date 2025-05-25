@@ -4,6 +4,8 @@ from pathlib import Path
 from prefect import flow, get_run_logger
 from prefect.server.schemas.schedules import CronSchedule
 from loguru import logger
+from prefect.client.orchestration import get_client
+from prefect.settings import PREFECT_API_URL
 
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
@@ -49,11 +51,34 @@ def data_ingestion_subflow():
         raise
 
 
+async def check_prefect_server():
+    """Check if Prefect server is accessible."""
+    try:
+        async with get_client() as client:
+            await client.read_flows()
+        return True
+    except Exception as e:
+        logger.error(f"Failed to connect to Prefect server: {str(e)}")
+        return False
+
+
 if __name__ == "__main__":
     logger.info("Starting trading deployment...")
-    data_ingestion_subflow.serve(
-        name="trading-data-ingestion",
-        cron="0 * * * *",
-        tags=["trading", "data-ingestion", "hourly"],
-        description="Hourly data ingestion flow for trading system"
-    )
+    
+    # Check Prefect server connection
+    import asyncio
+    if not asyncio.run(check_prefect_server()):
+        logger.error("Cannot connect to Prefect server. Please ensure the server is running.")
+        logger.info("To start the Prefect server, run: prefect server start")
+        sys.exit(1)
+    
+    try:
+        data_ingestion_subflow.serve(
+            name="trading-data-ingestion",
+            cron="0 * * * *",
+            tags=["trading", "data-ingestion", "hourly"],
+            description="Hourly data ingestion flow for trading system"
+        )
+    except Exception as e:
+        logger.error(f"Failed to deploy flow: {str(e)}")
+        sys.exit(1)
