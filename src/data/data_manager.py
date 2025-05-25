@@ -19,30 +19,6 @@ from src.database.db_manager import DatabaseManager
 from src.database.models import MarketData
 
 
-def generate_flow_run_name(flow_prefix: str) -> str:
-    """Generate a descriptive flow run name for debugging.
-    
-    Args:
-        flow_prefix: Prefix for the flow name (e.g., 'market-data-run')
-        
-    Returns:
-        str: Flow run name in format: prefix-YYYYMMDD-HHMMSS-{context}
-    """
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    
-    # Get environment info for debugging
-    env = os.getenv('ENVIRONMENT', 'dev')
-    
-    # Get active symbols count for market data flows
-    try:
-        symbols_count = len(SymbolManager.get_active_symbols())
-        context = f"symbols-{symbols_count}"
-    except Exception:
-        context = "unknown-symbols"
-    
-    return f"{flow_prefix}-{timestamp}-{env}-{context}"
-
-
 async def ensure_db_credentials():
     """Ensure database credentials are set in environment variables."""
     try:
@@ -64,6 +40,30 @@ async def ensure_db_credentials():
     except Exception as e:
         logger.error(f"Failed to set database credentials: {e}")
         raise
+
+
+def generate_flow_run_name(flow_prefix: str) -> str:
+    """Generate a descriptive flow run name for debugging.
+    
+    Args:
+        flow_prefix: Prefix for the flow name (e.g., 'market-data-run')
+        
+    Returns:
+        str: Flow run name in format: prefix-YYYYMMDD-HHMMSS-{context}
+    """
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    
+    # Get environment info for debugging
+    env = os.getenv('ENVIRONMENT', 'dev')
+    
+    # Get active symbols count for market data flows
+    try:
+        # Since we can't use async here, we'll just use a placeholder
+        context = "symbols-unknown"
+    except Exception:
+        context = "unknown-symbols"
+    
+    return f"{flow_prefix}-{timestamp}-{env}-{context}"
 
 
 @task(retries=3, retry_delay_seconds=60)
