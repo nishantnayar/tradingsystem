@@ -79,7 +79,7 @@ async def data_ingestion_subflow():
 
     try:
         # Load database connector from Prefect block
-        connector = SqlAlchemyConnector.load("tradingsystemdb")
+        connector = await SqlAlchemyConnector.load("tradingsystemdb")
         connection_info = connector.connection_info
 
         # Set environment variables for backward compatibility
