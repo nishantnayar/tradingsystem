@@ -7,7 +7,7 @@ A comprehensive trading system with real-time market data collection and analysi
 - Real-time market data collection from Alpaca API
 - Historical data storage in PostgreSQL
 - Technical analysis tools and indicators
-- Modern UI with Streamlit
+- Modern UI with Streamlit and custom navigation
 - Automated data collection workflows with Prefect
 - Comprehensive test suite
 
@@ -31,6 +31,9 @@ tradingsystem/
 │   ├── scripts/         # Utility scripts
 │   ├── trading/         # Trading strategies
 │   ├── ui/             # User interface
+│   │   ├── components/  # Reusable UI components
+│   │   ├── pages/      # Page modules
+│   │   └── state/      # UI state management
 │   └── utils/          # Utility functions
 ├── tests/               # Test suite
 │   ├── test_data/      # Data tests
@@ -84,6 +87,11 @@ python src/scripts/init_db.py
 streamlit run src/ui/app.py
 ```
 
+The UI provides three main sections:
+- **Home**: Dashboard with market overview and real-time data
+- **Analysis**: Technical analysis tools and charting capabilities
+- **Settings**: System configuration and preferences
+
 2. Run data collection workflows:
 ```bash
 python src/scripts/deploy_flows.py
@@ -125,4 +133,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Alpaca API for market data
 - Streamlit for the UI framework
 - SQLAlchemy for database management
-- Prefect for workflow orchestration 
+- Prefect for workflow orchestration
+- streamlit-option-menu for enhanced navigation 

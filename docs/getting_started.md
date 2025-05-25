@@ -86,6 +86,34 @@ python src/scripts/deploy_flows.py
 
 3. Access the dashboard at `http://localhost:8501`
 
+## Using the UI
+
+The Trading System provides a modern, intuitive interface with three main sections:
+
+### Home Dashboard
+- Market overview with real-time data
+- Current market status and hours
+- Quick access to frequently used symbols
+- Real-time price updates and charts
+
+### Analysis Tools
+- Technical analysis with customizable indicators
+- Interactive price charts with multiple timeframes
+- Volume analysis and market depth
+- Custom indicator settings
+
+### Settings
+- System configuration
+- API credentials management
+- Data collection preferences
+- Display and UI preferences
+
+Navigation between sections is done through the sidebar menu, which provides:
+- Clear visual hierarchy
+- Intuitive icons for each section
+- Easy access to all features
+- Responsive design for all screen sizes
+
 ## Next Steps
 
 - Read the [User Guide](user_guide.md) for detailed usage instructions

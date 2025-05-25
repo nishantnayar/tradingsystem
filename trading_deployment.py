@@ -23,6 +23,7 @@ logger.add(
 
 # Import after path setup
 from src.data.data_manager import collect_market_data, store_market_data
+from src.data.yahoo_finance_loader import YahooFinanceDataLoader
 
 
 def generate_flow_run_name(flow_prefix: str) -> str:
@@ -51,6 +52,23 @@ def data_ingestion_subflow():
         raise
 
 
+@flow(flow_run_name=lambda: generate_flow_run_name("data-ingestion-yahoo-company"))
+def data_ingestion_yahoo_company_subflow():
+    """Main flow for data ingestion."""
+    logger = get_run_logger()
+    logger.info("Starting yahoo company data ingestion flow...")
+
+    try:
+        # Collect market data
+        loader = YahooFinanceDataLoader()
+        loader.run()
+
+        logger.info("Yahoo Data ingestion flow completed successfully")
+    except Exception as e:
+        logger.error(f"Error in Yahoo data ingestion flow: {str(e)}")
+        raise
+
+
 async def check_prefect_server():
     """Check if Prefect server is accessible."""
     try:
@@ -64,20 +82,27 @@ async def check_prefect_server():
 
 if __name__ == "__main__":
     logger.info("Starting trading deployment...")
-    
+
     # Check Prefect server connection
     import asyncio
+
     if not asyncio.run(check_prefect_server()):
         logger.error("Cannot connect to Prefect server. Please ensure the server is running.")
         logger.info("To start the Prefect server, run: prefect server start")
         sys.exit(1)
-    
+
     try:
         data_ingestion_subflow.serve(
             name="trading-data-ingestion",
             cron="0 * * * *",
             tags=["trading", "data-ingestion", "hourly"],
             description="Hourly data ingestion flow for trading system"
+        )
+        data_ingestion_yahoo_company_subflow.serve(
+            name="yahoo-company-data-ingestion",
+            cron="0 19 * * 1-5 TZ=America/Chicago",
+            tags=["trading", "data-ingestion", "daily", 'yahoo-company'],
+            description="Daily data ingestion flow for yahoo company"
         )
     except Exception as e:
         logger.error(f"Failed to deploy flow: {str(e)}")

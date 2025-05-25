@@ -23,5 +23,5 @@ python-dotenv==1.0.0
 pyyaml==6.0.1
 loguru==0.7.2
 alpaca-py==0.40.1
-yfinance==0.2.31
+yfinance==0.2.59
 streamlit==1.32.0
