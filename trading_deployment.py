@@ -79,11 +79,17 @@ async def data_ingestion_subflow():
 
     try:
         # Get database credentials from Prefect secrets
-        db_user = await Secret.load("db-user").get()
-        db_password = await Secret.load("db-password").get()
-        db_host = await Secret.load("db-host").get()
-        db_port = str(await Secret.load("db-port").get())
-        db_name = await Secret.load("db-name").get()
+        db_user_secret = await Secret.load("db-user")
+        db_password_secret = await Secret.load("db-password")
+        db_host_secret = await Secret.load("db-host")
+        db_port_secret = await Secret.load("db-port")
+        db_name_secret = await Secret.load("db-name")
+
+        db_user = await db_user_secret.get()
+        db_password = await db_password_secret.get()
+        db_host = await db_host_secret.get()
+        db_port = str(await db_port_secret.get())
+        db_name = await db_name_secret.get()
 
         # Set environment variables for database connection
         import os
