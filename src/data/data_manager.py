@@ -3,6 +3,7 @@ from typing import List, Optional, Dict
 import os
 import platform
 import sys
+from prefect.blocks.system import Secret
 
 from loguru import logger
 from prefect import flow, task
@@ -42,12 +43,38 @@ def generate_flow_run_name(flow_prefix: str) -> str:
     return f"{flow_prefix}-{timestamp}-{env}-{context}"
 
 
+def ensure_db_credentials():
+    """Ensure database credentials are set in environment variables."""
+    try:
+        # Get database credentials from Prefect secrets
+        db_user = Secret.load("db-user").get()
+        db_password = Secret.load("db-password").get()
+        db_host = Secret.load("db-host").get()
+        db_port = str(Secret.load("db-port").get())
+        db_name = Secret.load("db-name").get()
+
+        # Set environment variables
+        os.environ["DB_USER"] = str(db_user)
+        os.environ["DB_PASSWORD"] = str(db_password)
+        os.environ["DB_HOST"] = str(db_host)
+        os.environ["DB_PORT"] = str(db_port)
+        os.environ["DB_NAME"] = str(db_name)
+
+        logger.debug(f"Database credentials set for host={db_host}, port={db_port}, user={db_user}, database={db_name}")
+    except Exception as e:
+        logger.error(f"Failed to set database credentials: {e}")
+        raise
+
+
 @task(retries=3, retry_delay_seconds=60)
 def collect_market_data() -> dict:
     """Task to collect market data for all active symbols."""
     logger.info("Starting data collection")
     
     try:
+        # Ensure database credentials are set
+        ensure_db_credentials()
+        
         # Get active symbols
         symbols = SymbolManager.get_active_symbols()
         logger.debug(f"Retrieved active symbols: {symbols}")  # Debug log
@@ -93,66 +120,74 @@ def store_market_data(data: dict):
         logger.warning("No data to store")
         return
 
-    db = DatabaseManager()
-    with db.get_session() as session:
-        for symbol, df in data.items():
-            if df.empty:
-                logger.warning(f"No data to store for symbol {symbol}")
-                continue
-                
-            logger.debug(f"Processing data for {symbol}")
-            logger.debug(f"DataFrame info:\n{df.info()}")
-            logger.debug(f"DataFrame head:\n{df.head()}")
-            
-            # Reset index to make timestamp a column
-            df = df.reset_index()
-            logger.debug(f"DataFrame after reset_index:\n{df.head()}")
-            
-            for _, row in df.iterrows():
-                try:
-                    # Use upsert operation to prevent duplicates
-                    stmt = text("""
-                        INSERT INTO market_data (symbol, timestamp, open, high, low, close, volume)
-                        VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
-                        ON CONFLICT (symbol, timestamp) 
-                        DO UPDATE SET
-                            open = EXCLUDED.open,
-                            high = EXCLUDED.high,
-                            low = EXCLUDED.low,
-                            close = EXCLUDED.close,
-                            volume = EXCLUDED.volume
-                    """)
-                    
-                    # Convert timestamp to UTC if it has timezone info
-                    timestamp = row['timestamp']
-                    if hasattr(timestamp, 'tz_localize'):
-                        timestamp = timestamp.tz_localize(None)
-                    
-                    params = {
-                        'symbol': symbol,
-                        'timestamp': timestamp,
-                        'open': float(row['open']),
-                        'high': float(row['high']),
-                        'low': float(row['low']),
-                        'close': float(row['close']),
-                        'volume': int(row['volume'])
-                    }
-                    
-                    logger.debug(f"Executing SQL with params: {params}")
-                    session.execute(stmt, params)
-                    
-                except Exception as e:
-                    logger.error(f"Error storing data for {symbol}: {str(e)}")
-                    logger.error(f"Row data: {row.to_dict()}")
+    try:
+        # Ensure database credentials are set
+        ensure_db_credentials()
+        
+        db = DatabaseManager()
+        with db.get_session() as session:
+            for symbol, df in data.items():
+                if df.empty:
+                    logger.warning(f"No data to store for symbol {symbol}")
                     continue
                     
-        try:
-            session.commit()
-            logger.info("Data storage completed successfully")
-        except Exception as e:
-            logger.error(f"Error committing data to database: {str(e)}")
-            session.rollback()
-            raise
+                logger.debug(f"Processing data for {symbol}")
+                logger.debug(f"DataFrame info:\n{df.info()}")
+                logger.debug(f"DataFrame head:\n{df.head()}")
+                
+                # Reset index to make timestamp a column
+                df = df.reset_index()
+                logger.debug(f"DataFrame after reset_index:\n{df.head()}")
+                
+                for _, row in df.iterrows():
+                    try:
+                        # Use upsert operation to prevent duplicates
+                        stmt = text("""
+                            INSERT INTO market_data (symbol, timestamp, open, high, low, close, volume)
+                            VALUES (:symbol, :timestamp, :open, :high, :low, :close, :volume)
+                            ON CONFLICT (symbol, timestamp) 
+                            DO UPDATE SET
+                                open = EXCLUDED.open,
+                                high = EXCLUDED.high,
+                                low = EXCLUDED.low,
+                                close = EXCLUDED.close,
+                                volume = EXCLUDED.volume
+                        """)
+                        
+                        # Convert timestamp to UTC if it has timezone info
+                        timestamp = row['timestamp']
+                        if hasattr(timestamp, 'tz_localize'):
+                            timestamp = timestamp.tz_localize(None)
+                        
+                        params = {
+                            'symbol': symbol,
+                            'timestamp': timestamp,
+                            'open': float(row['open']),
+                            'high': float(row['high']),
+                            'low': float(row['low']),
+                            'close': float(row['close']),
+                            'volume': int(row['volume'])
+                        }
+                        
+                        logger.debug(f"Executing SQL with params: {params}")
+                        session.execute(stmt, params)
+                        
+                    except Exception as e:
+                        logger.error(f"Error storing data for {symbol}: {str(e)}")
+                        logger.error(f"Row data: {row.to_dict()}")
+                        continue
+                        
+            try:
+                session.commit()
+                logger.info("Data storage completed successfully")
+            except Exception as e:
+                logger.error(f"Error committing data to database: {str(e)}")
+                session.rollback()
+                raise
+        
+    except Exception as e:
+        logger.error(f"Error storing data: {str(e)}")
+        raise
 
 
 @flow(name="Market Data Collection", flow_run_name=generate_flow_run_name("market-data"))

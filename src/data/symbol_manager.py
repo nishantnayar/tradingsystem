@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import List, Optional
 import sys
 from pathlib import Path
+import os
+from prefect.blocks.system import Secret
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -15,8 +17,32 @@ class SymbolManager:
     """Manages trading symbols in the database."""
 
     @staticmethod
+    def _ensure_db_credentials():
+        """Ensure database credentials are set in environment variables."""
+        try:
+            # Get database credentials from Prefect secrets
+            db_user = Secret.load("db-user").get()
+            db_password = Secret.load("db-password").get()
+            db_host = Secret.load("db-host").get()
+            db_port = str(Secret.load("db-port").get())
+            db_name = Secret.load("db-name").get()
+
+            # Set environment variables
+            os.environ["DB_USER"] = str(db_user)
+            os.environ["DB_PASSWORD"] = str(db_password)
+            os.environ["DB_HOST"] = str(db_host)
+            os.environ["DB_PORT"] = str(db_port)
+            os.environ["DB_NAME"] = str(db_name)
+
+            logger.debug(f"Database credentials set for host={db_host}, port={db_port}, user={db_user}, database={db_name}")
+        except Exception as e:
+            logger.error(f"Failed to set database credentials: {e}")
+            raise
+
+    @staticmethod
     def add_symbol(symbol: str, name: Optional[str] = None) -> Symbol:
         """Add a new symbol to the database."""
+        SymbolManager._ensure_db_credentials()
         db = DatabaseManager()
         with db.get_session() as session:
             existing_symbol = session.query(Symbol).filter_by(symbol=symbol).first()
@@ -44,6 +70,7 @@ class SymbolManager:
     @staticmethod
     def deactivate_symbol(symbol: str) -> bool:
         """Deactivate a symbol (mark as delisted)."""
+        SymbolManager._ensure_db_credentials()
         db = DatabaseManager()
         with db.get_session() as session:
             symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
@@ -61,6 +88,7 @@ class SymbolManager:
     def get_active_symbols() -> List[str]:
         """Get list of active symbols."""
         logger.debug("Retrieving active symbols from database")
+        SymbolManager._ensure_db_credentials()
         db = DatabaseManager()
         with db.get_session() as session:
             symbols = session.query(Symbol).filter_by(is_active=True).all()
@@ -71,6 +99,7 @@ class SymbolManager:
     @staticmethod
     def get_symbol_info(symbol: str) -> Optional[Symbol]:
         """Get detailed information about a symbol."""
+        SymbolManager._ensure_db_credentials()
         db = DatabaseManager()
         with db.get_session() as session:
             symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
@@ -90,6 +119,7 @@ class SymbolManager:
     @staticmethod
     def update_symbol_name(symbol: str, name: str) -> bool:
         """Update the name of a symbol."""
+        SymbolManager._ensure_db_credentials()
         db = DatabaseManager()
         with db.get_session() as session:
             symbol_obj = session.query(Symbol).filter_by(symbol=symbol).first()
