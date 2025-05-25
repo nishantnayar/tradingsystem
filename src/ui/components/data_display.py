@@ -3,13 +3,40 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pytz import timezone as pytz_timezone
 from loguru import logger
-from sqlalchemy import text
 from st_aggrid import AgGrid
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 from typing import Optional, Dict, Any
 
-from src.database.db_manager import DatabaseManager
+from src.ui.state.market_data_state import get_market_data
 from src.ui.components.date_display import format_datetime_est_to_cst
+
+
+def format_refresh_time(dt: datetime) -> str:
+    """Format refresh time in CST timezone consistently across the UI.
+    
+    Args:
+        dt: The datetime to format (assumed to be in CST)
+        
+    Returns:
+        str: Formatted datetime string in CST
+    """
+    # Ensure the datetime is in CST
+    cst_zone = pytz_timezone('US/Central')
+    if dt.tzinfo is None:
+        dt = cst_zone.localize(dt)
+    else:
+        dt = dt.astimezone(cst_zone)
+    
+    # Format the datetime
+    day = dt.day
+    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th') if day not in (11, 12, 13) else 'th'
+    month = dt.strftime("%B")
+    year = dt.year
+    hour = dt.strftime("%I").lstrip("0") or "12"  # Remove leading zero
+    minute = dt.strftime("%M")
+    ampm = dt.strftime("%p")
+    
+    return f"{day}{suffix} {month}, {year} {hour}:{minute} {ampm}"
 
 
 def create_metrics_display(data: pd.DataFrame) -> None:
@@ -51,52 +78,31 @@ def create_data_table(data: pd.DataFrame) -> None:
     )
 
 
-def display_market_data(symbol: str, lookback_days: int = 30) -> None:
+def display_market_data(symbol: str, force_refresh: bool = False) -> None:
     """Display market data for a symbol.
     
     Args:
         symbol: The stock symbol to display data for
-        lookback_days: Number of days of historical data to display
+        force_refresh: Whether to force a refresh of the data
     """
     try:
-        # Get database connection
-        db = DatabaseManager()
+        # Get data from state management
+        data = get_market_data(symbol, force_refresh)
+        
+        if data is None or data.empty:
+            st.warning(f"No data available for {symbol}")
+            return
 
-        # Query the latest data from the database
-        with db.get_session() as session:
-            query = text("""
-                SELECT timestamp, open, high, low, close, volume
-                FROM market_data
-                WHERE symbol = :symbol
-                AND timestamp > :start_date
-                ORDER BY timestamp DESC
-            """)
+        # Display metrics
+        create_metrics_display(data)
 
-            start_date = datetime.now() - timedelta(days=lookback_days)
-            result = session.execute(query, {
-                'symbol': symbol,
-                'start_date': start_date
-            })
-            
-            data = pd.DataFrame(
-                result.fetchall(),
-                columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
-            )
+        # Display timestamp
+        st.subheader('Market Data')
+        updated_date = data['timestamp'].iloc[0]
+        st.write(f'As of: {format_refresh_time(updated_date)}')
 
-            if data.empty:
-                st.warning(f"No data available for {symbol}")
-                return
-
-            # Display metrics
-            create_metrics_display(data)
-
-            # Display timestamp
-            st.subheader('Market Data')
-            updated_date = data['timestamp'].iloc[0]
-            st.write(f'As of: {format_datetime_est_to_cst(updated_date)}')
-
-            # Display data table
-            create_data_table(data)
+        # Display data table
+        create_data_table(data)
 
     except Exception as e:
         logger.error(f"Error displaying market data for {symbol}: {e}")

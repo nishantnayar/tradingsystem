@@ -4,10 +4,8 @@ from plotly.subplots import make_subplots
 from loguru import logger
 import pandas as pd
 from typing import Optional, Dict, Any
-from datetime import datetime
-from sqlalchemy import text
 
-from src.database.db_manager import DatabaseManager
+from src.ui.state.market_data_state import get_market_data
 
 
 def create_candlestick_chart(
@@ -61,40 +59,25 @@ def create_candlestick_chart(
     return fig
 
 
-def display_chart(symbol: str, indicators: Optional[Dict[str, Any]] = None):
+def display_chart(symbol: str, indicators: Optional[Dict[str, Any]] = None, force_refresh: bool = False):
     """Display price chart for a symbol.
     
     Args:
         symbol: The stock symbol to display chart for
         indicators: Optional dictionary of indicators to add to the chart
+        force_refresh: Whether to force a refresh of the data
     """
     try:
-        # Get database connection
-        db = DatabaseManager()
+        # Get data from state management
+        data = get_market_data(symbol, force_refresh)
+        
+        if data is None or data.empty:
+            st.warning(f"No data available for {symbol}")
+            return
 
-        # Query the latest data from the database
-        with db.get_session() as session:
-            query = text("""
-                SELECT timestamp, open, high, low, close, volume
-                FROM market_data
-                WHERE symbol = :symbol
-                AND timestamp > '2025-01-01'
-                ORDER BY timestamp DESC
-            """)
-
-            result = session.execute(query, {'symbol': symbol})
-            data = pd.DataFrame(
-                result.fetchall(),
-                columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
-            )
-
-            if data.empty:
-                st.warning(f"No data available for {symbol}")
-                return
-
-            # Create and display the chart
-            fig = create_candlestick_chart(data, symbol, indicators)
-            st.plotly_chart(fig, use_container_width=True)
+        # Create and display the chart
+        fig = create_candlestick_chart(data, symbol, indicators)
+        st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
         logger.error(f"Error displaying chart for {symbol}: {e}")

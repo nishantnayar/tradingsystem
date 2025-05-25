@@ -52,7 +52,8 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.radio(
         "Go to",
-        ["Home", "Analysis", "Settings"]
+        ["Home", "Analysis", "Settings"],
+        label_visibility="collapsed"
     )
     
     # Render the selected page
