@@ -32,46 +32,36 @@ class DatabaseManager:
         if self._initialized:
             return
 
-        self.config_path = str(Path(__file__).parent.parent.parent / "config" / "config.yaml")
         self.engine = None
         self.SessionLocal = None
-        
-        # Load environment variables from .env file
-        env_path = Path(__file__).parent.parent.parent / "config" / ".env"
-        load_dotenv(env_path)
-        
-        self._load_config()
-        self._initialize_connection()
         self._initialized = True
-
-    def _load_config(self) -> None:
-        """Load database configuration from YAML file."""
-        try:
-            with open(self.config_path, 'r') as f:
-                config = yaml.safe_load(f)
-                self.db_config = config['database']
-
-            # Replace environment variables
-            self.db_config['user'] = os.getenv('DB_USER', self.db_config['user'])
-            self.db_config['password'] = os.getenv('DB_PASSWORD', self.db_config['password'])
-
-        except Exception as e:
-            logger.error(f"Failed to load database configuration: {e}")
-            raise
+        self._initialize_connection()
 
     def _initialize_connection(self) -> None:
         """Initialize database connection and session factory."""
         try:
+            # Get database credentials from environment variables
+            db_user = os.getenv('DB_USER')
+            db_password = os.getenv('DB_PASSWORD')
+            db_host = os.getenv('DB_HOST')
+            db_port = os.getenv('DB_PORT')
+            db_name = os.getenv('DB_NAME')
+
+            if not all([db_user, db_password, db_host, db_port, db_name]):
+                raise ValueError("Missing database configuration in environment variables")
+
+            logger.debug(f"Connecting to database at {db_host}:{db_port}")
+
             connection_string = (
-                f"postgresql://{self.db_config['user']}:{self.db_config['password']}@"
-                f"{self.db_config['host']}:{self.db_config['port']}/{self.db_config['name']}"
+                f"postgresql://{db_user}:{db_password}@"
+                f"{db_host}:{db_port}/{db_name}"
             )
 
             self.engine = create_engine(
                 connection_string,
                 poolclass=QueuePool,
-                pool_size=self.db_config.get('pool_size', 5),
-                max_overflow=self.db_config.get('max_overflow', 10),
+                pool_size=5,
+                max_overflow=10,
                 pool_timeout=30,
                 pool_recycle=1800
             )

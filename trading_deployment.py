@@ -93,7 +93,8 @@ def data_ingestion_subflow():
         os.environ["DB_PORT"] = str(db_port)  # Ensure it's a string
         os.environ["DB_NAME"] = str(db_name)
 
-        logger.debug("Database credentials loaded from Prefect secrets")
+        # Debug log the connection details (excluding password)
+        logger.debug(f"Database connection details: host={db_host}, port={db_port}, user={db_user}, database={db_name}")
 
         # Collect market data
         data = collect_market_data()
