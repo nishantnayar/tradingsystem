@@ -83,11 +83,11 @@ async def data_ingestion_subflow():
         connection_info = connector.connection_info
 
         # Set environment variables for backward compatibility
-        os.environ["DB_USER"] = connection_info.username
-        os.environ["DB_PASSWORD"] = connection_info.password
-        os.environ["DB_HOST"] = connection_info.host
+        os.environ["DB_USER"] = str(connection_info.username)
+        os.environ["DB_PASSWORD"] = str(connection_info.password)
+        os.environ["DB_HOST"] = str(connection_info.host)
         os.environ["DB_PORT"] = str(connection_info.port)
-        os.environ["DB_NAME"] = connection_info.database
+        os.environ["DB_NAME"] = str(connection_info.database)
 
         # Debug log the connection details (excluding password)
         logger.debug(f"Database connection details: host={connection_info.host}, port={connection_info.port}, user={connection_info.username}, database={connection_info.database}")
