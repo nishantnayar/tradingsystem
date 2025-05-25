@@ -23,17 +23,11 @@ async def ensure_db_credentials():
     """Ensure database credentials are set in environment variables."""
     try:
         # Get database credentials from Prefect secrets
-        db_user_secret = await Secret.load("db-user")
-        db_password_secret = await Secret.load("db-password")
-        db_host_secret = await Secret.load("db-host")
-        db_port_secret = await Secret.load("db-port")
-        db_name_secret = await Secret.load("db-name")
-
-        db_user = await db_user_secret.get()
-        db_password = await db_password_secret.get()
-        db_host = await db_host_secret.get()
-        db_port = str(await db_port_secret.get())
-        db_name = await db_name_secret.get()
+        db_user = await Secret.load("db-user")
+        db_password = await Secret.load("db-password")
+        db_host = await Secret.load("db-host")
+        db_port = str(await Secret.load("db-port"))
+        db_name = await Secret.load("db-name")
 
         # Set environment variables
         os.environ["DB_USER"] = str(db_user)
