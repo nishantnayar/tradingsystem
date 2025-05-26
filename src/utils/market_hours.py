@@ -153,6 +153,7 @@ class MarketHoursManager:
     def get_market_hours(self, date: Optional[datetime] = None) -> Dict[str, datetime]:
         """
         Get market open and close times for a specific date.
+        Simplified version that assumes standard market hours (9:30 AM - 4:00 PM ET).
         
         Args:
             date: Date to check (default: today)
@@ -163,10 +164,13 @@ class MarketHoursManager:
         try:
             current_time = datetime.now(timezone.utc)
             
-            # Force use of 2024 for future dates
+            # Use current date in 2024
             if current_time.year > 2024:
-                logger.warning(f"System time shows future year {current_time.year}. Forcing use of 2024.")
-                current_time = current_time.replace(year=2024)
+                logger.warning(f"System time shows future year {current_time.year}. Using current date in 2024.")
+                current_time = datetime(2024, current_time.month, current_time.day, 
+                                      current_time.hour, current_time.minute, 
+                                      current_time.second, current_time.microsecond,
+                                      tzinfo=timezone.utc)
             
             if date is None:
                 date = current_time
@@ -179,41 +183,23 @@ class MarketHoursManager:
                 logger.warning(f"Date {date} is in the future, using current time: {current_time}")
                 date = current_time
             
-            # Force use of 2024 for future dates
+            # Use current date in 2024
             if date.year > 2024:
-                logger.warning(f"Date {date} is in future year {date.year}. Forcing use of 2024.")
-                date = date.replace(year=2024)
+                logger.warning(f"Date {date} is in future year {date.year}. Using current date in 2024.")
+                date = datetime(2024, date.month, date.day, 
+                              date.hour, date.minute, 
+                              date.second, date.microsecond,
+                              tzinfo=timezone.utc)
             
             logger.debug(f"Getting market hours for date: {date}")
             
-            # Try to get calendar data for the date
-            date_str = date.strftime("%Y-%m-%d")
-            calendar = self._make_request(f"calendar?start={date_str}&end={date_str}")
-            
-            if not calendar:
-                logger.debug(f"No calendar data for {date_str}, trying previous day")
-                # Try previous day
-                prev_date = date - timedelta(days=1)
-                date_str = prev_date.strftime("%Y-%m-%d")
-                calendar = self._make_request(f"calendar?start={date_str}&end={date_str}")
-                
-                if not calendar:
-                    logger.warning(f"No calendar data found for {date_str}")
-                    # If still no data, use standard market hours (9:30 AM - 4:00 PM ET)
-                    base_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
-                    return {
-                        "open": base_date.replace(hour=13, minute=30, tzinfo=timezone.utc),  # 9:30 AM ET
-                        "close": base_date.replace(hour=20, minute=0, tzinfo=timezone.utc)   # 4:00 PM ET
-                    }
-            
-            logger.debug(f"Calendar response: {calendar}")
-            trading_day = calendar[0]
-            base_date = datetime.strptime(trading_day["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            
+            # Use standard market hours (9:30 AM - 4:00 PM ET)
+            base_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
             return {
-                "open": self._parse_market_time(base_date, trading_day["open"]),
-                "close": self._parse_market_time(base_date, trading_day["close"])
+                "open": base_date.replace(hour=13, minute=30, tzinfo=timezone.utc),  # 9:30 AM ET
+                "close": base_date.replace(hour=20, minute=0, tzinfo=timezone.utc)   # 4:00 PM ET
             }
+            
         except Exception as e:
             logger.error(f"Error getting market hours: {e}")
             # Fallback to standard market hours

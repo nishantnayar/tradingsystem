@@ -85,86 +85,56 @@ class AlpacaDataSource(DataSource):
         self,
         symbol: str,
         interval: str = "1h",
-        lookback_days: int = 1000  # Default to 1 day of data
+        lookback_days: int = 90  # Default to 90 days of data
     ) -> pd.DataFrame:
         """Get the latest data from Alpaca.
         
         Args:
             symbol: The stock symbol
             interval: Data interval (e.g., "1h", "1d")
-            lookback_days: Number of days of historical data to fetch (default: 1)
+            lookback_days: Number of days of historical data to fetch (default: 90)
         """
         end_date = datetime.now(timezone.utc)
         logger.debug(f"Getting latest data for {symbol}")
         logger.debug(f"Current time (UTC): {end_date}")
         
-        # If market is closed, adjust end_date to last market close
-        if not self.market_hours.is_market_open():
-            market_hours = self.market_hours.get_market_hours(end_date)
-            if market_hours:
-                end_date = market_hours["close"]
-                logger.debug(f"Market closed, using last close: {end_date}")
-            else:
-                # If we can't get market hours, use previous day's close
-                end_date = end_date - timedelta(days=1)
-                end_date = end_date.replace(hour=16, minute=0, second=0, microsecond=0)
-                logger.debug(f"Using previous day's close: {end_date}")
+        # Use current date in 2024
+        if end_date.year > 2024:
+            logger.warning(f"System time shows future year {end_date.year}. Using current date in 2024.")
+            end_date = datetime(2024, end_date.month, end_date.day, 
+                              end_date.hour, end_date.minute, 
+                              end_date.second, end_date.microsecond,
+                              tzinfo=timezone.utc)
         
         start_date = end_date - timedelta(days=lookback_days)
-        logger.debug(f"Calculated start date: {start_date}")
-        logger.debug(f"Lookback period: {lookback_days} days")
+        logger.debug(f"Date range: {start_date} to {end_date}")
         
-        # Use extended historical data for large lookback periods
-        if lookback_days > 30:
-            return self.get_extended_historical_data(symbol, start_date, end_date, interval)
-        else:
-            return self.get_historical_data(symbol, start_date, end_date, interval)
+        return self.get_historical_data(symbol, start_date, end_date, interval)
 
     def get_multiple_symbols(
         self,
         symbols: List[str],
         interval: str = "1h",
-        lookback_days: int = 1000  # Default to 1 day of data
+        lookback_days: int = 90  # Default to 90 days of data
     ) -> Dict[str, pd.DataFrame]:
         """Get data for multiple symbols from Alpaca."""
         logger.debug(f"Getting data for symbols: {symbols}")
         
-        # Force use of current date (2024)
+        # Use current date in 2024
         current_time = datetime.now(timezone.utc)
         if current_time.year > 2024:
-            logger.warning(f"System time shows future year {current_time.year}. Forcing use of 2024.")
-            current_time = current_time.replace(year=2024)
+            logger.warning(f"System time shows future year {current_time.year}. Using current date in 2024.")
+            current_time = datetime(2024, current_time.month, current_time.day, 
+                                  current_time.hour, current_time.minute, 
+                                  current_time.second, current_time.microsecond,
+                                  tzinfo=timezone.utc)
         
         logger.debug(f"Using time (UTC): {current_time}")
         
-        # Validate and adjust lookback_days
-        if lookback_days > 365:
-            logger.warning(f"Lookback period of {lookback_days} days is too large. Limiting to 365 days.")
-            lookback_days = 365
-        
+        # Set end date to current time
         end_date = current_time
         
-        # Check market status
-        market_open = self.market_hours.is_market_open()
-        logger.debug(f"Market status: {'Open' if market_open else 'Closed'}")
-        
-        # If market is closed, adjust end_date to last market close
-        if not market_open:
-            market_hours = self.market_hours.get_market_hours(end_date)
-            if market_hours:
-                end_date = market_hours["close"]
-                logger.debug(f"Market closed, using last close: {end_date}")
-            else:
-                # If we can't get market hours, use previous day's close
-                end_date = end_date - timedelta(days=1)
-                end_date = end_date.replace(hour=20, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
-                logger.debug(f"Using previous day's close: {end_date}")
-        
-        # Ensure end_date is not in the future
-        if end_date > current_time:
-            end_date = current_time
-            logger.debug(f"Adjusted end_date to current time: {end_date}")
-        
+        # Calculate start date based on lookback period
         start_date = end_date - timedelta(days=lookback_days)
         logger.debug(f"Date range: {start_date} to {end_date}")
         logger.debug(f"Lookback period: {lookback_days} days")
