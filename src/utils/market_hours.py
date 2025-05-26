@@ -161,13 +161,18 @@ class MarketHoursManager:
             Dict containing open and close times
         """
         try:
-            if date is None:
-                date = datetime.now(timezone.utc)
+            current_time = datetime.now(timezone.utc)
             
-            # If date is in the future, get the most recent trading day
-            if date > datetime.now(timezone.utc):
-                logger.debug(f"Date {date} is in the future, getting most recent trading day")
-                date = datetime.now(timezone.utc)
+            if date is None:
+                date = current_time
+            elif date.tzinfo is None:
+                # If date has no timezone, assume UTC
+                date = date.replace(tzinfo=timezone.utc)
+            
+            # If date is in the future, use current time
+            if date > current_time:
+                logger.warning(f"Date {date} is in the future, using current time: {current_time}")
+                date = current_time
             
             logger.debug(f"Getting market hours for date: {date}")
             

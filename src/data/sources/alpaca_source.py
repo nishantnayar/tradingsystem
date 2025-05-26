@@ -128,7 +128,17 @@ class AlpacaDataSource(DataSource):
     ) -> Dict[str, pd.DataFrame]:
         """Get data for multiple symbols from Alpaca."""
         logger.debug(f"Getting data for symbols: {symbols}")
-        end_date = datetime.now(timezone.utc)
+        
+        # Force use of current date
+        current_time = datetime.now(timezone.utc)
+        logger.debug(f"Current system time (UTC): {current_time}")
+        
+        # Validate and adjust lookback_days
+        if lookback_days > 365:
+            logger.warning(f"Lookback period of {lookback_days} days is too large. Limiting to 365 days.")
+            lookback_days = 365
+        
+        end_date = current_time
         
         # If market is closed, adjust end_date to last market close
         if not self.market_hours.is_market_open():
@@ -141,6 +151,11 @@ class AlpacaDataSource(DataSource):
                 end_date = end_date - timedelta(days=1)
                 end_date = end_date.replace(hour=20, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
                 logger.debug(f"Using previous day's close: {end_date}")
+        
+        # Ensure end_date is not in the future
+        if end_date > current_time:
+            end_date = current_time
+            logger.debug(f"Adjusted end_date to current time: {end_date}")
         
         start_date = end_date - timedelta(days=lookback_days)
         logger.debug(f"Date range: {start_date} to {end_date}")
