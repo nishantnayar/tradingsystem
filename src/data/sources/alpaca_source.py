@@ -71,7 +71,7 @@ class AlpacaDataSource(DataSource):
         self,
         symbol: str,
         interval: str = "1h",
-        lookback_days: int = 10  # Default to 1 day of data
+        lookback_days: int = 1000  # Default to 1 day of data
     ) -> pd.DataFrame:
         """Get the latest data from Alpaca.
         
@@ -99,7 +99,7 @@ class AlpacaDataSource(DataSource):
         self,
         symbols: List[str],
         interval: str = "1h",
-        lookback_days: int = 10  # Default to 1 day of data
+        lookback_days: int = 1000  # Default to 1 day of data
     ) -> Dict[str, pd.DataFrame]:
         """Get data for multiple symbols from Alpaca."""
         logger.debug(f"Getting data for symbols: {symbols}")
