@@ -129,9 +129,13 @@ class AlpacaDataSource(DataSource):
         """Get data for multiple symbols from Alpaca."""
         logger.debug(f"Getting data for symbols: {symbols}")
         
-        # Force use of current date
+        # Force use of current date (2024)
         current_time = datetime.now(timezone.utc)
-        logger.debug(f"Current system time (UTC): {current_time}")
+        if current_time.year > 2024:
+            logger.warning(f"System time shows future year {current_time.year}. Forcing use of 2024.")
+            current_time = current_time.replace(year=2024)
+        
+        logger.debug(f"Using time (UTC): {current_time}")
         
         # Validate and adjust lookback_days
         if lookback_days > 365:

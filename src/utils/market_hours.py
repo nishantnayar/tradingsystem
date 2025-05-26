@@ -163,6 +163,11 @@ class MarketHoursManager:
         try:
             current_time = datetime.now(timezone.utc)
             
+            # Force use of 2024 for future dates
+            if current_time.year > 2024:
+                logger.warning(f"System time shows future year {current_time.year}. Forcing use of 2024.")
+                current_time = current_time.replace(year=2024)
+            
             if date is None:
                 date = current_time
             elif date.tzinfo is None:
@@ -173,6 +178,11 @@ class MarketHoursManager:
             if date > current_time:
                 logger.warning(f"Date {date} is in the future, using current time: {current_time}")
                 date = current_time
+            
+            # Force use of 2024 for future dates
+            if date.year > 2024:
+                logger.warning(f"Date {date} is in future year {date.year}. Forcing use of 2024.")
+                date = date.replace(year=2024)
             
             logger.debug(f"Getting market hours for date: {date}")
             
