@@ -1,30 +1,35 @@
-# prefect.yaml
-name: trading-data-ingestion
-description: Hourly data ingestion flow for trading system
-schedule:
-  cron: "0 * * * *"
-  timezone: "UTC"
-tags:
-  - trading
-  - data-ingestion
-  - hourly
-work_queue: default
-entrypoint: trading_deployment.py:data_ingestion_subflow
-parameters: {}
-storage:
-  type: local
-  path: .
+# Welcome to your prefect.yaml file! You can use this file for storing and managing
+# configuration for deploying your flows. We recommend committing this file to source
+# control along with your flow code.
 
+# Generic metadata about this project
+name: tradingsystem
+prefect-version: 3.4.0
+
+# build section allows you to manage and build docker images
+build: null
+
+# push section allows you to manage if and how this project is uploaded to remote locations
+push: null
+
+# pull section allows you to provide instructions for cloning this project in remote locations
 pull:
 - prefect.deployments.steps.git_clone:
     repository: https://github.com/nishantnayar/tradingsystem.git
-    branch: main  # Changed from master to main
+    branch: main
+    access_token: null
 
+# the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: TradingAnalysis
-  entrypoint: trading_deployment.py:data_ingestion_subflow
+- name: null
+  version: null
+  tags: []
+  description: null
+  schedule: {}
+  flow_name: null
+  entrypoint: null
+  parameters: {}
   work_pool:
-    name: process
-  schedule:
-    cron: "0 19 * * 1-5"
-    timezone: America/New_York
+    name: null
+    work_queue_name: null
+    job_variables: {}

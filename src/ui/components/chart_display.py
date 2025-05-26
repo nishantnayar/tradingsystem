@@ -220,8 +220,8 @@ def create_candlestick_chart_simplified(
         title=f"{symbol}<br><sup>2025</sup>",
         title_font_color="#444",
         title_font_size=24,
-        plot_bgcolor='rgb(247,247,247)',
-        paper_bgcolor='rgb(247,247,247)',
+        #plot_bgcolor='rgb(247,247,247)',
+        #paper_bgcolor='rgb(247,247,247)',
         yaxis=dict(
             title="Price",
             title_font_color="#444",
