@@ -71,3 +71,4 @@ tradingsystem.egg-info/
 /src/archive
 test_db_connection.py
 src/data/yahoo_raw_data.csv
+prefect_secrets.py

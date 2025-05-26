@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from loguru import logger
 from dotenv import load_dotenv
+from prefect.blocks.system import Secret
 
 from src.database.models import Base
 
@@ -45,15 +46,17 @@ class DatabaseManager:
         self._initialized = True
 
     def _load_config(self) -> None:
-        """Load database configuration from YAML file."""
+        """Load database configuration from YAML file and Prefect secrets."""
         try:
             with open(self.config_path, 'r') as f:
                 config = yaml.safe_load(f)
                 self.db_config = config['database']
 
-            # Replace environment variables
-            self.db_config['user'] = os.getenv('DB_USER', self.db_config['user'])
-            self.db_config['password'] = os.getenv('DB_PASSWORD', self.db_config['password'])
+            # Load credentials from Prefect secrets
+            self.db_config['user'] = Secret.load("db-user").get()
+            self.db_config['password'] = Secret.load("db-password").get()
+            self.db_config['host'] = Secret.load("db-host").get()
+            self.db_config['name'] = Secret.load("db-name").get()
 
         except Exception as e:
             logger.error(f"Failed to load database configuration: {e}")

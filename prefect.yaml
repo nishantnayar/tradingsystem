@@ -21,15 +21,19 @@ pull:
 
 # the deployments section allows you to provide configuration for deploying flows
 deployments:
-- name: null
-  version: null
-  tags: []
-  description: null
-  schedule: {}
-  flow_name: null
-  entrypoint: null
+- name: hourly-data-ingestion
+  version: 1.0.0
+  tags: ["hourly", "data"]
+  description: "Ingests hourly market data"
+  schedule:
+    - cron: 0 19 * * 1-5
+      timezone: EST
+      day_or: true
+      active: true
+  flow_name: data_ingestion_subflow
+  entrypoint: prefect_deployment.py:data_ingestion_subflow
   parameters: {}
   work_pool:
-    name: null
-    work_queue_name: null
+    name: hourly
+    work_queue_name: hourly_data
     job_variables: {}
