@@ -7,7 +7,7 @@ import time
 from loguru import logger
 from sqlalchemy import text
 import random
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from src.database.db_manager import DatabaseManager
 from src.data.symbol_manager import SymbolManager
@@ -18,6 +18,8 @@ class YahooFinanceDataLoader:
         self.db = DatabaseManager()
         self.rate_limit_delay = 2  # Base delay between requests in seconds
         self.max_retries = 3  # Maximum number of retries for failed requests
+        self.raw_data = []  # List to store raw ticker info
+        self.columns_printed = False  # Flag to track if columns have been printed
 
     def _get_ticker_info_with_retry(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get ticker info with retry logic and rate limiting."""
@@ -27,33 +29,38 @@ class YahooFinanceDataLoader:
                 jitter = random.uniform(0.5, 1.5)
                 time.sleep(self.rate_limit_delay * jitter)
 
-                # Get ticker info using fast_info for better reliability
+                # Get ticker info
                 ticker = yf.Ticker(symbol)
-                fast_info = ticker.fast_info
-                
-                # Get additional info from info if available
-                try:
-                    info = ticker.info
-                    industry = info.get('industry')
-                    sector = info.get('sector')
-                    company_name = info.get('longName')
-                except Exception:
-                    # If info fails, use basic info from fast_info
-                    industry = None
-                    sector = None
-                    company_name = fast_info.get('displayName')
+                ticker_info = ticker.info
 
-                # Only return if we have at least some valid data
-                if company_name or industry or sector:
-                    return {
-                        'symbol': symbol,
-                        'industry': industry,
-                        'sector': sector,
-                        'company_name': company_name
-                    }
-                else:
-                    logger.warning(f"No valid data found for {symbol}")
-                    return None
+                # Store raw data for inspection
+                ticker_info['symbol'] = symbol
+                self.raw_data.append(ticker_info)
+
+                # Extract company officers data before removing it
+                company_officers = ticker_info.get('companyOfficers', [])
+                if company_officers:
+                    self.store_company_officers(symbol, company_officers)
+
+                # Remove fields that are not in our database schema
+                ticker_info.pop('companyOfficers', None)
+                ticker_info.pop('underlyingSymbol', None)  # Remove underlyingSymbol field
+                ticker_info.pop('firstTradeDateEpochUtc', None)  # Remove firstTradeDateEpochUtc field
+                ticker_info.pop('timeZoneFullName', None)  # Remove timeZoneFullName field
+                ticker_info.pop('timeZoneShortName', None)  # Remove timeZoneShortName field
+                ticker_info.pop('gmtOffSetMilliseconds', None)  # Remove gmtOffSetMilliseconds field
+                ticker_info.pop('uuid', None)  # Remove uuid field
+                ticker_info.pop('industrySymbol', None)  # Remove industrySymbol field
+
+                # Add symbol to the info dictionary
+                ticker_info['symbol'] = symbol
+
+                # Convert any non-serializable values to strings
+                for key, value in ticker_info.items():
+                    if isinstance(value, (dict, list)):
+                        ticker_info[key] = str(value)
+
+                return ticker_info
 
             except Exception as e:
                 if "429" in str(e):  # Rate limit error
@@ -68,6 +75,52 @@ class YahooFinanceDataLoader:
                     return None
 
         return None
+
+    def store_company_officers(self, symbol: str, officers: List[Dict[str, Any]]):
+        """Store company officers information in the database."""
+        if not officers:
+            return
+
+        session = None
+        try:
+            session = self.db.get_session().__enter__()
+            
+            # First, delete existing officers for this symbol
+            delete_stmt = text("DELETE FROM yahoo_company_officers WHERE symbol = :symbol")
+            session.execute(delete_stmt, {'symbol': symbol})
+            
+            # Insert new officers
+            for officer in officers:
+                insert_stmt = text("""
+                    INSERT INTO yahoo_company_officers 
+                    (symbol, name, title, age, year_born, fiscal_year, total_pay, exercised_value, unexercised_value)
+                    VALUES 
+                    (:symbol, :name, :title, :age, :year_born, :fiscal_year, :total_pay, :exercised_value, :unexercised_value)
+                """)
+                
+                session.execute(insert_stmt, {
+                    'symbol': symbol,
+                    'name': officer.get('name'),
+                    'title': officer.get('title'),
+                    'age': officer.get('age'),
+                    'year_born': officer.get('yearBorn'),
+                    'fiscal_year': officer.get('fiscalYear'),
+                    'total_pay': officer.get('totalPay'),
+                    'exercised_value': officer.get('exercisedValue'),
+                    'unexercised_value': officer.get('unexercisedValue')
+                })
+            
+            session.commit()
+            logger.info(f"Stored {len(officers)} company officers for {symbol}")
+            
+        except Exception as e:
+            if session:
+                session.rollback()
+            logger.error(f"Error storing company officers for {symbol}: {e}")
+            raise
+        finally:
+            if session:
+                session.close()
 
     def load_ticker_info_chunk(self, stock_symbols):
         # List to store processed data for the current chunk
@@ -92,26 +145,40 @@ class YahooFinanceDataLoader:
             
             for info in company_info_list:
                 try:
-                    # Only update if we have at least one non-NULL value
-                    if any(info.get(field) for field in ['industry', 'sector', 'company_name']):
-                        # Upsert the company information
-                        stmt = text("""
-                            INSERT INTO yahoo_company_info (symbol, industry, sector, company_name)
-                            VALUES (:symbol, :industry, :sector, :company_name)
-                            ON CONFLICT (symbol) DO UPDATE SET
-                                industry = COALESCE(EXCLUDED.industry, yahoo_company_info.industry),
-                                sector = COALESCE(EXCLUDED.sector, yahoo_company_info.sector),
-                                company_name = COALESCE(EXCLUDED.company_name, yahoo_company_info.company_name),
-                                updated_at = CURRENT_TIMESTAMP
-                        """)
-                        
-                        session.execute(stmt, info)
-                        logger.info(f"Stored company info for {info['symbol']}")
-                    else:
-                        logger.warning(f"Skipping {info['symbol']} - no valid data to store")
+                    # Create dynamic SQL statement based on available fields
+                    fields = list(info.keys())
+                    # Quote fields that start with numbers or contain uppercase letters
+                    quoted_fields = []
+                    for field in fields:
+                        if field[0].isdigit() or any(c.isupper() for c in field):
+                            quoted_fields.append(f'"{field}"')
+                        else:
+                            quoted_fields.append(field)
+                    placeholders = [f":{field}" for field in fields]
+                    
+                    # Create the INSERT statement
+                    insert_stmt = f"""
+                        INSERT INTO yahoo_company_info ({', '.join(quoted_fields)})
+                        VALUES ({', '.join(placeholders)})
+                        ON CONFLICT (symbol) DO UPDATE SET
+                    """
+                    
+                    # Create the UPDATE part of the statement
+                    update_parts = []
+                    for field in fields:
+                        if field != 'symbol':  # Skip symbol in UPDATE part
+                            quoted_field = f'"{field}"' if field[0].isdigit() or any(c.isupper() for c in field) else field
+                            update_parts.append(f"{quoted_field} = COALESCE(EXCLUDED.{quoted_field}, yahoo_company_info.{quoted_field})")
+                    
+                    insert_stmt += ', '.join(update_parts)
+                    insert_stmt += ", updated_at = CURRENT_TIMESTAMP"
+                    
+                    # Execute the statement
+                    session.execute(text(insert_stmt), info)
+                    logger.info(f"Stored company info for {info['symbol']}")
+                    
                 except Exception as e:
                     logger.error(f"Error storing company info for {info['symbol']}: {e}")
-                    # Don't continue with this session if we hit an error
                     raise
 
             session.commit()
@@ -163,7 +230,8 @@ if __name__ == "__main__":
     loader = YahooFinanceDataLoader()
     loader.run()
 
-    # # Save the resulting data to a CSV file
-    if not loader.yahoo_data_df.empty:
-        loader.yahoo_data_df.to_csv("ticker_info.csv", index=False)
-        print("Ticker info saved to ticker_info.csv")
+    # Save the raw data to CSV for inspection
+    if loader.raw_data:
+        raw_df = pd.DataFrame(loader.raw_data)
+        raw_df.to_csv("yahoo_raw_data.csv", index=False)
+        print("\nRaw ticker info saved to yahoo_raw_data.csv")

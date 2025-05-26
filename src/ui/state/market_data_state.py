@@ -136,4 +136,42 @@ def get_price_change(symbol: str) -> Optional[float]:
     data = get_market_data(symbol)
     if data is not None and len(data) >= 2:
         return ((data['close'].iloc[0] / data['close'].iloc[1] - 1) * 100)
-    return None 
+    return None
+
+
+def get_company_info(symbol: str) -> Optional[Dict[str, Any]]:
+    """Get company information from the yahoo_company_info table.
+    
+    Args:
+        symbol: The stock symbol to get company info for
+        
+    Returns:
+        Optional[Dict[str, Any]]: Dictionary containing company info or None if not available
+    """
+    try:
+        db = DatabaseManager()
+        with db.get_session() as session:
+            query = text("""
+                SELECT "longName", industry, sector, address1, address2, city, state
+                FROM yahoo_company_info
+                WHERE symbol = :symbol
+            """)
+            
+            result = session.execute(query, {'symbol': symbol})
+            row = result.fetchone()
+            
+            if row:
+                return {
+                    'company_name': row[0],
+                    'industry': row[1],
+                    'sector': row[2],
+                    'address1': row[3],
+                    'address2': row[4],
+                    'city': row[5],
+                    'state': row[6]
+                }
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error fetching company info for {symbol}: {e}")
+        return None 

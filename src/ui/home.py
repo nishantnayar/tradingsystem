@@ -12,7 +12,7 @@ from src.data.symbol_manager import SymbolManager
 from src.ui.components.market_status import display_market_status
 from src.ui.components.symbol_selector import display_symbol_selector
 from src.ui.components.data_display import display_market_data, format_refresh_time
-from src.ui.components.chart_display import display_chart
+from src.ui.components.chart_display import display_chart, display_chart_simplified
 from src.database.db_manager import DatabaseManager
 from src.ui.state.market_data_state import (
     get_market_data,
@@ -66,9 +66,9 @@ def render_home():
 
         # Display chart with default indicators
         st.subheader("Price Chart")
-        display_chart(
+        display_chart_simplified(
             selected_symbol,
-            indicators={'sma': {'period': 20}},
+            #indicators={'sma': {'period': 20}},
             force_refresh=st.session_state.get('force_refresh', False)
         )
 

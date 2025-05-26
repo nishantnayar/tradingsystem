@@ -98,12 +98,7 @@ if __name__ == "__main__":
             tags=["trading", "data-ingestion", "hourly"],
             description="Hourly data ingestion flow for trading system"
         )
-        data_ingestion_yahoo_company_subflow.serve(
-            name="yahoo-company-data-ingestion",
-            cron="0 19 * * 1-5 TZ=America/Chicago",
-            tags=["trading", "data-ingestion", "daily", 'yahoo-company'],
-            description="Daily data ingestion flow for yahoo company"
-        )
     except Exception as e:
         logger.error(f"Failed to deploy flow: {str(e)}")
         sys.exit(1)
+

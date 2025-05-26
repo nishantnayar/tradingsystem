@@ -8,7 +8,13 @@ from loguru import logger
 
 from src.data.symbol_manager import SymbolManager
 from src.ui.components.chart_display import display_chart
-from src.ui.state.market_data_state import get_market_data, get_latest_price, get_price_change, get_last_refresh_time
+from src.ui.state.market_data_state import (
+    get_market_data,
+    get_latest_price,
+    get_price_change,
+    get_last_refresh_time,
+    get_company_info
+)
 from src.ui.components.data_display import format_refresh_time
 
 
@@ -18,11 +24,11 @@ def render_analysis():
     """Render the analysis page."""
     st.title("Technical Analysis")
 
-    tab1, tab2 = st.tabs(["Indicators", "BackTesting"])
-    with tab1:
+    tab0, tab1, tab2 = st.tabs(["Company Info","Indicators", "BackTesting"])
 
-        # Controls section
-        st.subheader("Controls")
+    with tab0:
+        st.header("Company Info")
+        
         col1, col2 = st.columns([1, 3])
 
         with col1:
@@ -48,6 +54,40 @@ def render_analysis():
             # Store selected symbol in session state
             if selected_symbol:
                 st.session_state.selected_symbol = selected_symbol
+
+        # Add a separator
+        st.markdown("---")
+
+        # Display company information
+        if selected_symbol:
+            company_info = get_company_info(selected_symbol)
+            if company_info:
+                col1, col2, col3 = st.columns([3, 3, 3])
+                with col1:
+                    st.write("Company Name")
+                    st.write(f"**{company_info['company_name']}**")
+                with col2:
+                    st.write("Sector")
+                    st.write(f"**{company_info['sector']}**")
+                with col3:
+                    st.write("Industry")
+                    st.write(f"**{company_info['industry']}**")
+
+                st.write("Address")
+                if company_info['address2'] is not None:
+                    st.write(f"**{company_info['address1']+ ', ' +company_info['address2']+', ' +company_info['city']+', '+company_info['state']}**")
+                else:
+                    st.write(f"**{company_info['address1']+ ', ' +company_info['city']+', '+company_info['state']}**")
+            else:
+                st.warning("No company information available for this symbol.")
+        else:
+            st.info("Please select a symbol to view company information.")
+
+    with tab1:
+
+        # Controls section
+        st.subheader("Controls")
+        st.write(f"Showing Data for {selected_symbol}")
 
         # Add a separator
         st.markdown("---")
