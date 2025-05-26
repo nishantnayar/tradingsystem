@@ -140,8 +140,12 @@ class AlpacaDataSource(DataSource):
         
         end_date = current_time
         
+        # Check market status
+        market_open = self.market_hours.is_market_open()
+        logger.debug(f"Market status: {'Open' if market_open else 'Closed'}")
+        
         # If market is closed, adjust end_date to last market close
-        if not self.market_hours.is_market_open():
+        if not market_open:
             market_hours = self.market_hours.get_market_hours(end_date)
             if market_hours:
                 end_date = market_hours["close"]
@@ -159,6 +163,7 @@ class AlpacaDataSource(DataSource):
         
         start_date = end_date - timedelta(days=lookback_days)
         logger.debug(f"Date range: {start_date} to {end_date}")
+        logger.debug(f"Lookback period: {lookback_days} days")
         
         # Split symbols into smaller batches to avoid rate limits
         batch_size = 100
@@ -178,6 +183,7 @@ class AlpacaDataSource(DataSource):
                 )
                 
                 logger.debug("Making API request to Alpaca...")
+                logger.debug(f"Request parameters: {request_params}")
                 bars = self.client.get_stock_bars(request_params)
                 logger.debug(f"Received response from Alpaca for {len(batch_symbols)} symbols")
                 
@@ -186,6 +192,7 @@ class AlpacaDataSource(DataSource):
                     if symbol in bars:
                         df = pd.DataFrame(bars[symbol])
                         logger.debug(f"Got data for {symbol}: {len(df)} rows")
+                        logger.debug(f"Data range for {symbol}: {df.index.min()} to {df.index.max()}")
                         
                         # Add symbol column and reset index
                         df.insert(0, "symbol", symbol)
@@ -207,6 +214,7 @@ class AlpacaDataSource(DataSource):
                     
             except Exception as e:
                 logger.error(f"Error fetching data for batch: {str(e)}")
+                logger.error(f"Request parameters: {request_params}")
                 # Continue with next batch even if this one fails
                 continue
         
