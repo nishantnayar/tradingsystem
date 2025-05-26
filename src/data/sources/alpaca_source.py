@@ -135,51 +135,67 @@ class AlpacaDataSource(DataSource):
             market_hours = self.market_hours.get_market_hours(end_date)
             if market_hours:
                 end_date = market_hours["close"]
+                logger.debug(f"Market closed, using last close: {end_date}")
             else:
                 # If we can't get market hours, use previous day's close
                 end_date = end_date - timedelta(days=1)
-                end_date = end_date.replace(hour=16, minute=0, second=0, microsecond=0)
+                end_date = end_date.replace(hour=20, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+                logger.debug(f"Using previous day's close: {end_date}")
         
         start_date = end_date - timedelta(days=lookback_days)
         logger.debug(f"Date range: {start_date} to {end_date}")
         
-        request_params = StockBarsRequest(
-            symbol_or_symbols=symbols,
-            timeframe=self._convert_interval(interval),
-            start=start_date,
-            end=end_date,
-            feed="iex"  # Use IEX feed instead of SIP
-        )
+        # Split symbols into smaller batches to avoid rate limits
+        batch_size = 100
+        result = {}
         
-        try:
-            logger.debug("Making API request to Alpaca...")
-            bars = self.client.get_stock_bars(request_params)
-            logger.debug(f"Received response from Alpaca for {len(symbols)} symbols")
+        for i in range(0, len(symbols), batch_size):
+            batch_symbols = symbols[i:i + batch_size]
+            logger.debug(f"Processing batch {i//batch_size + 1} of {(len(symbols) + batch_size - 1)//batch_size}")
             
-            # Convert the response to a dictionary of DataFrames
-            result = {}
-            for symbol in symbols:
-                if symbol in bars:
-                    df = pd.DataFrame(bars[symbol])
-                    logger.debug(f"Got data for {symbol}: {len(df)} rows")
-                    
-                    # Add symbol column and reset index
-                    df.insert(0, "symbol", symbol)
-                    df.reset_index(inplace=True)
-                    
-                    # Add missing columns if not present
-                    if 'trade_count' not in df.columns:
-                        df['trade_count'] = 0
-                    if 'vwap' not in df.columns:
-                        df['vwap'] = 0
+            try:
+                request_params = StockBarsRequest(
+                    symbol_or_symbols=batch_symbols,
+                    timeframe=self._convert_interval(interval),
+                    start=start_date,
+                    end=end_date,
+                    feed="iex"  # Use IEX feed instead of SIP
+                )
+                
+                logger.debug("Making API request to Alpaca...")
+                bars = self.client.get_stock_bars(request_params)
+                logger.debug(f"Received response from Alpaca for {len(batch_symbols)} symbols")
+                
+                # Convert the response to a dictionary of DataFrames
+                for symbol in batch_symbols:
+                    if symbol in bars:
+                        df = pd.DataFrame(bars[symbol])
+                        logger.debug(f"Got data for {symbol}: {len(df)} rows")
                         
-                    result[symbol] = self._standardize_columns(df)
-                else:
-                    logger.warning(f"No data available for symbol {symbol}")
-            return result
-        except Exception as e:
-            logger.error(f"Error fetching data for multiple symbols: {str(e)}")
-            return {}
+                        # Add symbol column and reset index
+                        df.insert(0, "symbol", symbol)
+                        df.reset_index(inplace=True)
+                        
+                        # Add missing columns if not present
+                        if 'trade_count' not in df.columns:
+                            df['trade_count'] = 0
+                        if 'vwap' not in df.columns:
+                            df['vwap'] = 0
+                            
+                        result[symbol] = self._standardize_columns(df)
+                    else:
+                        logger.warning(f"No data available for symbol {symbol}")
+                
+                # Add a small delay between batches to avoid rate limits
+                if i + batch_size < len(symbols):
+                    time.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Error fetching data for batch: {str(e)}")
+                # Continue with next batch even if this one fails
+                continue
+        
+        return result
 
     def get_extended_historical_data(
         self,

@@ -164,15 +164,33 @@ class MarketHoursManager:
             if date is None:
                 date = datetime.now(timezone.utc)
             
+            # If date is in the future, get the most recent trading day
+            if date > datetime.now(timezone.utc):
+                logger.debug(f"Date {date} is in the future, getting most recent trading day")
+                date = datetime.now(timezone.utc)
+            
             logger.debug(f"Getting market hours for date: {date}")
-            # Format date as YYYY-MM-DD
+            
+            # Try to get calendar data for the date
             date_str = date.strftime("%Y-%m-%d")
             calendar = self._make_request(f"calendar?start={date_str}&end={date_str}")
             
             if not calendar:
-                logger.warning(f"No calendar data found for {date_str}")
-                return {}
+                logger.debug(f"No calendar data for {date_str}, trying previous day")
+                # Try previous day
+                prev_date = date - timedelta(days=1)
+                date_str = prev_date.strftime("%Y-%m-%d")
+                calendar = self._make_request(f"calendar?start={date_str}&end={date_str}")
                 
+                if not calendar:
+                    logger.warning(f"No calendar data found for {date_str}")
+                    # If still no data, use standard market hours (9:30 AM - 4:00 PM ET)
+                    base_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+                    return {
+                        "open": base_date.replace(hour=13, minute=30, tzinfo=timezone.utc),  # 9:30 AM ET
+                        "close": base_date.replace(hour=20, minute=0, tzinfo=timezone.utc)   # 4:00 PM ET
+                    }
+            
             logger.debug(f"Calendar response: {calendar}")
             trading_day = calendar[0]
             base_date = datetime.strptime(trading_day["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -183,4 +201,9 @@ class MarketHoursManager:
             }
         except Exception as e:
             logger.error(f"Error getting market hours: {e}")
-            return {} 
+            # Fallback to standard market hours
+            base_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            return {
+                "open": base_date.replace(hour=13, minute=30, tzinfo=timezone.utc),  # 9:30 AM ET
+                "close": base_date.replace(hour=20, minute=0, tzinfo=timezone.utc)   # 4:00 PM ET
+            } 
