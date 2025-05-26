@@ -8,6 +8,7 @@ from alpaca.data.timeframe import TimeFrame
 import sys
 from pathlib import Path
 from loguru import logger
+import time
 
 # Add the project root to Python path
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
@@ -40,6 +41,10 @@ class AlpacaDataSource(DataSource):
         """Get historical data from Alpaca."""
         timeframe = self._convert_interval(interval)
         
+        logger.debug(f"Fetching historical data for {symbol}")
+        logger.debug(f"Date range: {start_date} to {end_date}")
+        logger.debug(f"Interval: {interval} (timeframe: {timeframe})")
+        
         request_params = StockBarsRequest(
             symbol_or_symbols=symbol,
             timeframe=timeframe,
@@ -49,8 +54,16 @@ class AlpacaDataSource(DataSource):
         )
         
         try:
+            logger.debug("Making API request to Alpaca...")
             bars = self.client.get_stock_bars(request_params)
+            logger.debug(f"Received response from Alpaca for {symbol}")
+            
+            if not bars:
+                logger.warning(f"No data returned for {symbol}")
+                return pd.DataFrame()
+                
             df = pd.DataFrame(bars)
+            logger.debug(f"DataFrame shape: {df.shape}")
             
             # Add symbol column and reset index
             df.insert(0, "symbol", symbol)
@@ -65,6 +78,7 @@ class AlpacaDataSource(DataSource):
             return self._standardize_columns(df)
         except Exception as e:
             logger.error(f"Error fetching data for {symbol}: {str(e)}")
+            logger.error(f"Request parameters: {request_params}")
             return pd.DataFrame()  # Return empty DataFrame on error
 
     def get_latest_data(
@@ -81,19 +95,30 @@ class AlpacaDataSource(DataSource):
             lookback_days: Number of days of historical data to fetch (default: 1)
         """
         end_date = datetime.now(timezone.utc)
+        logger.debug(f"Getting latest data for {symbol}")
+        logger.debug(f"Current time (UTC): {end_date}")
         
         # If market is closed, adjust end_date to last market close
         if not self.market_hours.is_market_open():
             market_hours = self.market_hours.get_market_hours(end_date)
             if market_hours:
                 end_date = market_hours["close"]
+                logger.debug(f"Market closed, using last close: {end_date}")
             else:
                 # If we can't get market hours, use previous day's close
                 end_date = end_date - timedelta(days=1)
                 end_date = end_date.replace(hour=16, minute=0, second=0, microsecond=0)
+                logger.debug(f"Using previous day's close: {end_date}")
         
         start_date = end_date - timedelta(days=lookback_days)
-        return self.get_historical_data(symbol, start_date, end_date, interval)
+        logger.debug(f"Calculated start date: {start_date}")
+        logger.debug(f"Lookback period: {lookback_days} days")
+        
+        # Use extended historical data for large lookback periods
+        if lookback_days > 30:
+            return self.get_extended_historical_data(symbol, start_date, end_date, interval)
+        else:
+            return self.get_historical_data(symbol, start_date, end_date, interval)
 
     def get_multiple_symbols(
         self,
@@ -189,16 +214,46 @@ class AlpacaDataSource(DataSource):
                 logger.warning("Requesting more than 1 year of hourly data. Switching to daily bars.")
                 timeframe = TimeFrame.Day
             
-            request_params = StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=timeframe,
-                start=start_date,
-                end=end_date,
-                feed="iex"
-            )
+            # Split the date range into smaller chunks to avoid rate limits
+            chunk_size = timedelta(days=30)  # 30 days per chunk
+            current_start = start_date
+            all_data = []
             
-            bars = self.client.get_stock_bars(request_params)
-            df = pd.DataFrame(bars)
+            while current_start < end_date:
+                current_end = min(current_start + chunk_size, end_date)
+                logger.debug(f"Fetching chunk from {current_start} to {current_end}")
+                
+                request_params = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=timeframe,
+                    start=current_start,
+                    end=current_end,
+                    feed="iex"
+                )
+                
+                try:
+                    bars = self.client.get_stock_bars(request_params)
+                    if bars:
+                        df = pd.DataFrame(bars)
+                        all_data.append(df)
+                        logger.debug(f"Got {len(df)} rows for chunk")
+                    else:
+                        logger.warning(f"No data returned for chunk {current_start} to {current_end}")
+                except Exception as e:
+                    logger.error(f"Error fetching chunk: {e}")
+                    # Add a small delay before retrying
+                    time.sleep(1)
+                
+                current_start = current_end + timedelta(days=1)
+                # Add a small delay between chunks to avoid rate limits
+                time.sleep(0.5)
+            
+            if not all_data:
+                logger.warning(f"No data collected for {symbol}")
+                return pd.DataFrame()
+            
+            # Combine all chunks
+            df = pd.concat(all_data, ignore_index=True)
             
             # Add symbol column and reset index
             df.insert(0, "symbol", symbol)

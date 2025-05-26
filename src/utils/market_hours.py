@@ -35,7 +35,9 @@ class MarketHoursManager:
             bool: True if market is open, False otherwise
         """
         try:
+            logger.debug("Checking market status...")
             clock = self._make_request("clock")
+            logger.debug(f"Market clock response: {clock}")
             return clock["is_open"]
         except Exception as e:
             logger.error(f"Error checking market status: {e}")
@@ -162,10 +164,16 @@ class MarketHoursManager:
             if date is None:
                 date = datetime.now(timezone.utc)
             
-            calendar = self.get_market_calendar(date, date)
-            if not calendar:
-                return {}
+            logger.debug(f"Getting market hours for date: {date}")
+            # Format date as YYYY-MM-DD
+            date_str = date.strftime("%Y-%m-%d")
+            calendar = self._make_request(f"calendar?start={date_str}&end={date_str}")
             
+            if not calendar:
+                logger.warning(f"No calendar data found for {date_str}")
+                return {}
+                
+            logger.debug(f"Calendar response: {calendar}")
             trading_day = calendar[0]
             base_date = datetime.strptime(trading_day["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
             
